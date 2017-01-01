@@ -2,12 +2,14 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Xml.Serialization;
 using Discord;
 using Discord.WebSocket;
+using RexBot;
 
 namespace Discord1Test
 {
@@ -31,17 +33,20 @@ namespace Discord1Test
         {
             public string Command;
             public string Response;
-            public bool RexxarOnly;
+            public bool IsPublic;
             public bool ImageResponse;
 
-            public InfoCommand( string command, string response, bool rexxarOnly, bool imageResponse )
+            public InfoCommand( string command, string response, bool isPublic = true, bool imageResponse = false )
             {
                 Command = command;
                 Response = response;
-                RexxarOnly = rexxarOnly;
+                IsPublic = isPublic;
                 ImageResponse = imageResponse;
             }
         }
+
+        private static RexBotCore _instance;
+        public static RexBotCore Instance => _instance ?? (_instance = new RexBotCore());
 
         private DiscordSocketClient _rexxarClient;
         private DiscordSocketClient _rexbotClient;
@@ -64,11 +69,14 @@ namespace Discord1Test
         private const long REXXAR_ID = 135116459675222016;
         private const long REXBOT_ID = 264301401801228289;
 
-        static void Main(string[] args) => new RexBotCore().Run().GetAwaiter().GetResult();
+        public List<InfoCommand> InfoCommands = new List<InfoCommand>();
+        private List<IChatCommand> ChatCommands = new List<IChatCommand>();
+
+        static void Main(string[] args) => Instance.Run().GetAwaiter().GetResult();
 
         public async Task Run()
         {
-            Console.WriteLine("initializing...");
+            Console.WriteLine("Initializing...");
             string filename = Path.Combine( AppDomain.CurrentDomain.BaseDirectory, "tokens.xml" );
             if ( !File.Exists( filename ) )
             {
@@ -83,12 +91,15 @@ namespace Discord1Test
                 tokens = (List<Token>)x.Deserialize( reader );
                 reader.Close();
             }
+            ScanAssemblyForCommands();
+            LoadCommands();
                 await Login(tokens);
             await Task.Delay(-1);
         }
 
         async Task<bool> Login(List<Token> tokens )
         {
+            Console.WriteLine("Authenticating...");
             try
             {
                 if (_rexxarClient == null)
@@ -104,7 +115,7 @@ namespace Discord1Test
                 await _rexbotClient.SetGame("GoodAI");
                 _rexbotClient.MessageReceived += RexbotMessageReceived;
 
-                Console.WriteLine("ready");
+                Console.WriteLine("Ready.");
             }
             catch (Exception ex)
             {
@@ -115,6 +126,41 @@ namespace Discord1Test
             return true;
         }
 
+        public void SaveCommands()
+        {
+            using (StreamWriter writer = new StreamWriter(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "InfoCommands.xml")))
+            {
+                XmlSerializer x = new XmlSerializer(typeof(List<InfoCommand>));
+                x.Serialize(writer, InfoCommands);
+                writer.Close();
+            }
+        }
+
+        private void LoadCommands()
+        {
+            Console.WriteLine("Loading info commands...");
+            using (StreamReader reader = new StreamReader(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "InfoCommands.xml")))
+            {
+                XmlSerializer x = new XmlSerializer(typeof(List<InfoCommand>));
+                InfoCommands = (List<InfoCommand>)x.Deserialize(reader);
+                reader.Close();
+            }
+        }
+
+        private void ScanAssemblyForCommands()
+        {
+            Console.WriteLine("Loading chat commands...");
+            var types = Assembly.GetCallingAssembly().DefinedTypes;
+            foreach (var type in types)
+            {
+                if (type.ImplementedInterfaces.Contains(typeof(IChatCommand)))
+                {
+                    Console.WriteLine("Found: " + type.FullName);
+                    ChatCommands.Add((IChatCommand)Activator.CreateInstance(type));
+                }
+            }
+        }
+
         private async Task RexbotMessageReceived(SocketMessage message)
         {
             var channel = message.Channel;
@@ -122,51 +168,46 @@ namespace Discord1Test
             if (message.Author.Id == REXBOT_ID)
                 return;
 
-            if (message.Content.Equals("meark pls", StringComparison.CurrentCultureIgnoreCase))
+            foreach (var command in InfoCommands)
             {
-                Console.WriteLine($"{DateTime.Now}: [{channel.ServerName()}: {channel.Name}] {message.Author.Username}: {message.Content}");
-                await channel.SendFileAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "xocBoss.gif"));
-            }
-
-            if (message.Content.ToLower().StartsWith("!approve"))
-            {
-                if (message.Author.Id == _rexxarClient.CurrentUser.Id)
+                if (message.Content.Equals(command.Command, StringComparison.CurrentCultureIgnoreCase))
                 {
-                    var splits = message.Content.Split(' ');
-                    Console.WriteLine($"{DateTime.Now}: [{channel.ServerName()}: {channel.Name}] {message.Author.Username}: {message.Content}");
-                    if (splits.Length > 1)
-                        await channel.SendFileAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"approval{splits[1]}.png"));
+                    if (!command.IsPublic && message.Author.Id != REXXAR_ID)
+                    {
+                        await channel.SendMessageAsync($"{message.Author.Mention} You aren't allowed to use that command!");
+                        break;
+                    }
+                    if (!command.ImageResponse)
+                        await channel.SendMessageAsync(command.Response);
                     else
-                        await channel.SendFileAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "approval0.png"));
+                        await channel.SendFileAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, command.Response));
                 }
-                else
+            }
+
+            string messageLower = message.Content.ToLower();
+            foreach (var command in ChatCommands)
+            {
+                if (messageLower.StartsWith(command.Command))
                 {
-                    await channel.SendMessageAsync($"{message.Author.Mention} I don't take orders from you!");
+                    if (!command.IsPublic && message.Author.Id != REXXAR_ID)
+                    {
+                        await channel.SendMessageAsync($"{message.Author.Mention} You aren't allowed to use that command!");
+                        break;
+                    }
+                    string response;
+                    try
+                    {
+                        response = command.Handle(message.Content);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine(ex);
+                        await channel.SendMessageAsync($"Error processing message!```{ex}```");
+                        break;
+                    }
+                    if (!string.IsNullOrEmpty(response))
+                        await channel.SendMessageAsync(response);
                 }
-            }
-
-            if (message.Content.Equals("!fixit", StringComparison.CurrentCultureIgnoreCase) || message.Content.Equals("!fixxit", StringComparison.CurrentCultureIgnoreCase))
-            {
-                Console.WriteLine($"{DateTime.Now}: [{channel.ServerName()}: {channel.Name}] {message.Author.Username}: {message.Content}");
-                await channel.SendFileAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "i_fix.png"));
-            }
-            
-            if (message.Content.Equals("!keen", StringComparison.CurrentCultureIgnoreCase))
-            {
-                Console.WriteLine($"{DateTime.Now}: [{channel.ServerName()}: {channel.Name}] {message.Author.Username}: {message.Content}");
-                await channel.SendFileAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "KEEN.jpg"));
-            }
-
-            if (message.Content.Equals("!crit", StringComparison.CurrentCultureIgnoreCase))
-            {
-                Console.WriteLine($"{DateTime.Now}: [{channel.ServerName()}: {channel.Name}] {message.Author.Username}: {message.Content}");
-                await channel.SendMessageAsync("Modders, complain at me! ModAPI Critical Issues thread: http://forum.keenswh.com/threads/modapi-critical-issues.7390963/");
-            }
-            
-            if (message.Content.Equals("!bug", StringComparison.CurrentCultureIgnoreCase))
-            {
-                Console.WriteLine($"{DateTime.Now}: [{channel.ServerName()}: {channel.Name}] {message.Author.Username}: {message.Content}");
-                await channel.SendMessageAsync("KSH bug report forum: http://praiseclang.com");
             }
 
             if (message.MentionedUsers.Any(u => u.Id == REXXAR_ID))

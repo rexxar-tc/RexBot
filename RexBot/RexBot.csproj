@@ -163,6 +163,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Commands\CommandAddCommand.cs" />
+    <Compile Include="Commands\CommandRemoveCommand.cs" />
+    <Compile Include="Commands\IChatCommand.cs" />
     <Compile Include="RexBotCore.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
