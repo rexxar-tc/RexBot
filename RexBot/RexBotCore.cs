@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Dynamic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -48,8 +49,8 @@ namespace Discord1Test
         private static RexBotCore _instance;
         public static RexBotCore Instance => _instance ?? (_instance = new RexBotCore());
 
-        private DiscordSocketClient _rexxarClient;
-        private DiscordSocketClient _rexbotClient;
+        public DiscordSocketClient RexxarClient;
+        public DiscordSocketClient RexbotClient;
 
         private const string ASKING_RESPONSE = "It seems you're asking if you can ask a question, rexxar usually ignores these.\r\n" +
                                                "If you have a Space Engineers or SESE bug, please report it on the KSH forum.\r\n" +
@@ -66,11 +67,14 @@ namespace Discord1Test
         private const string INTRO_MSG = "bleep bloop bleep, this is rexxar's auto-respond bot.";
         private const string FIXIT_RESPONSE = "No:tm: :sunglasses:";
 
-        private const long REXXAR_ID = 135116459675222016;
-        private const long REXBOT_ID = 264301401801228289;
+        public const long REXXAR_ID = 135116459675222016;
+        public const long REXBOT_ID = 264301401801228289;
 
-        public List<InfoCommand> InfoCommands = new List<InfoCommand>();
-        private List<IChatCommand> ChatCommands = new List<IChatCommand>();
+        private List<InfoCommand> _infoCommands = new List<InfoCommand>();
+        private List<IChatCommand> _chatCommands = new List<IChatCommand>();
+
+        public List<InfoCommand> InfoCommands { get { return _infoCommands; } }
+        public List<IChatCommand> ChatCommands { get { return _chatCommands; } }
 
         static void Main(string[] args) => Instance.Run().GetAwaiter().GetResult();
 
@@ -102,18 +106,18 @@ namespace Discord1Test
             Console.WriteLine("Authenticating...");
             try
             {
-                if (_rexxarClient == null)
-                    _rexxarClient = new DiscordSocketClient();
-                await _rexxarClient.LoginAsync( TokenType.User, tokens.First( t => t.Name == "rexxar" ).Value);
-                await _rexxarClient.ConnectAsync();
-                _rexxarClient.MessageReceived += RexxarMessageReceived;
+                if (RexxarClient == null)
+                    RexxarClient = new DiscordSocketClient();
+                await RexxarClient.LoginAsync( TokenType.User, tokens.First( t => t.Name == "rexxar" ).Value);
+                await RexxarClient.ConnectAsync();
+                RexxarClient.MessageReceived += RexxarMessageReceived;
 
-                if(_rexbotClient == null)
-                    _rexbotClient = new DiscordSocketClient();
-                await _rexbotClient.LoginAsync(TokenType.Bot, tokens.First(t => t.Name == "rexbot").Value);
-                await _rexbotClient.ConnectAsync();
-                await _rexbotClient.SetGame("GoodAI");
-                _rexbotClient.MessageReceived += RexbotMessageReceived;
+                if(RexbotClient == null)
+                    RexbotClient = new DiscordSocketClient();
+                await RexbotClient.LoginAsync(TokenType.Bot, tokens.First(t => t.Name == "rexbot").Value);
+                await RexbotClient.ConnectAsync();
+                await RexbotClient.SetGame("GoodAI");
+                RexbotClient.MessageReceived += RexbotMessageReceived;
 
                 Console.WriteLine("Ready.");
             }
@@ -131,18 +135,18 @@ namespace Discord1Test
             using (StreamWriter writer = new StreamWriter(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "InfoCommands.xml")))
             {
                 XmlSerializer x = new XmlSerializer(typeof(List<InfoCommand>));
-                x.Serialize(writer, InfoCommands);
+                x.Serialize(writer, _infoCommands);
                 writer.Close();
             }
         }
 
-        private void LoadCommands()
+        public void LoadCommands()
         {
             Console.WriteLine("Loading info commands...");
             using (StreamReader reader = new StreamReader(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "InfoCommands.xml")))
             {
                 XmlSerializer x = new XmlSerializer(typeof(List<InfoCommand>));
-                InfoCommands = (List<InfoCommand>)x.Deserialize(reader);
+                _infoCommands = (List<InfoCommand>)x.Deserialize(reader);
                 reader.Close();
             }
         }
@@ -153,10 +157,11 @@ namespace Discord1Test
             var types = Assembly.GetCallingAssembly().DefinedTypes;
             foreach (var type in types)
             {
+                
                 if (type.ImplementedInterfaces.Contains(typeof(IChatCommand)))
                 {
                     Console.WriteLine("Found: " + type.FullName);
-                    ChatCommands.Add((IChatCommand)Activator.CreateInstance(type));
+                    _chatCommands.Add((IChatCommand)Activator.CreateInstance(type));
                 }
             }
         }
@@ -168,36 +173,40 @@ namespace Discord1Test
             if (message.Author.Id == REXBOT_ID)
                 return;
 
-            foreach (var command in InfoCommands)
+            foreach (var command in _infoCommands)
             {
                 if (message.Content.Equals(command.Command, StringComparison.CurrentCultureIgnoreCase))
                 {
+                    Console.WriteLine($"{DateTime.Now} [{channel.ServerName()}: {channel.Name}] {message.Author.Username}: {message.Content}");
                     if (!command.IsPublic && message.Author.Id != REXXAR_ID)
                     {
                         await channel.SendMessageAsync($"{message.Author.Mention} You aren't allowed to use that command!");
                         break;
                     }
+                    Console.WriteLine("Responding: " + command.Response );
                     if (!command.ImageResponse)
                         await channel.SendMessageAsync(command.Response);
                     else
                         await channel.SendFileAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, command.Response));
                 }
             }
-
+            
             string messageLower = message.Content.ToLower();
-            foreach (var command in ChatCommands)
+            foreach (var command in _chatCommands)
             {
                 if (messageLower.StartsWith(command.Command))
                 {
+                    Console.WriteLine($"{DateTime.Now} [{channel.ServerName()}: {channel.Name}] {message.Author.Username}: {message.Content}");
                     if (!command.IsPublic && message.Author.Id != REXXAR_ID)
                     {
+                        Console.WriteLine("Not Authorized");
                         await channel.SendMessageAsync($"{message.Author.Mention} You aren't allowed to use that command!");
                         break;
                     }
                     string response;
                     try
                     {
-                        response = command.Handle(message.Content);
+                        response = command.Handle(message);
                     }
                     catch (Exception ex)
                     {
@@ -205,6 +214,7 @@ namespace Discord1Test
                         await channel.SendMessageAsync($"Error processing message!```{ex}```");
                         break;
                     }
+                    Console.WriteLine("Responding: " + response);
                     if (!string.IsNullOrEmpty(response))
                         await channel.SendMessageAsync(response);
                 }
@@ -224,7 +234,7 @@ namespace Discord1Test
         {
             var channel = message.Channel;
 
-            if (message.Author.Id == _rexxarClient.CurrentUser.Id)
+            if (message.Author.Id == RexxarClient.CurrentUser.Id)
             {
                 return;
             }
@@ -241,7 +251,7 @@ namespace Discord1Test
                     return;
                 }
             }
-            if (message.MentionedUsers.Any(u => u.Id == _rexxarClient.CurrentUser.Id) && asking)
+            if (message.MentionedUsers.Any(u => u.Id == RexxarClient.CurrentUser.Id) && asking)
             {
                 Console.WriteLine($"{DateTime.Now}: [{channel.ServerName()}: {channel.Name}] {message.Author.Username}: {message.Content}");
                     Console.WriteLine("Responding in DM");

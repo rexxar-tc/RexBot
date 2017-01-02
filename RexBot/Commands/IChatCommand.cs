@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Discord.WebSocket;
 
 namespace RexBot
 {
@@ -11,6 +12,6 @@ namespace RexBot
         bool IsPublic { get; }
         string Command { get; }
         string HelpText { get; }
-        string Handle(string args);
+        string Handle(SocketMessage message);
     }
 }
