@@ -14,7 +14,7 @@ namespace RexBot.Commands
         public string Command => "!reloadcommands";
         public string HelpText => "Reloads commands from disk";
 
-        public string Handle( SocketMessage message )
+        public async Task<string> Handle( SocketMessage message )
         {
             RexBotCore.Instance.InfoCommands.Clear();
             RexBotCore.Instance.LoadCommands();

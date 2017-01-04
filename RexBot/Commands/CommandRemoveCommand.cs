@@ -13,7 +13,7 @@ namespace RexBot.Commands
         public bool IsPublic => false;
         public string Command => "!removecommand";
         public string HelpText => "Removes info command";
-        public string Handle(SocketMessage message)
+        public async Task<string> Handle(SocketMessage message)
         {
             string target = message.Content.Substring(Command.Length + 1);
             foreach (var info in RexBotCore.Instance.InfoCommands)

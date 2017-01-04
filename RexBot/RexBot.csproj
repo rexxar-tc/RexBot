@@ -168,6 +168,7 @@
     <Compile Include="Commands\CommandAllInfo.cs" />
     <Compile Include="Commands\CommandHelp.cs" />
     <Compile Include="Commands\CommandRemoveCommand.cs" />
+    <Compile Include="Commands\CommandRexStatus.cs" />
     <Compile Include="Commands\CommandStatus.cs" />
     <Compile Include="Commands\IChatCommand.cs" />
     <Compile Include="RexBotCore.cs" />

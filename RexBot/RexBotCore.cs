@@ -206,7 +206,7 @@ namespace Discord1Test
                     string response;
                     try
                     {
-                        response = command.Handle(message);
+                        response = await command.Handle(message);
                     }
                     catch (Exception ex)
                     {

@@ -10,16 +10,16 @@ namespace RexBot.Commands
 {
     class CommandStatus : IChatCommand
     {
-        public bool IsPublic => false;
+        public bool IsPublic => true;
         public string Command => "!status";
-        public string HelpText => "Sets RexBot's status";
-        public string Handle(SocketMessage message)
+        public string HelpText => "Sets RexBot's current game";
+        public async Task<string> Handle(SocketMessage message)
         {
             string arg = message.Content.Substring(Command.Length + 1);
 
-            RexBotCore.Instance.RexbotClient.SetGame(arg);
+            await RexBotCore.Instance.RexbotClient.SetGame(arg);
 
-            return string.Empty;
+            return "Set status to " + arg;
         }
     }
 }

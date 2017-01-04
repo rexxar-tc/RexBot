@@ -11,9 +11,10 @@ namespace RexBot
     {
         public static string[] ParseCommand( string input )
         {
-            var splits = Regex.Split( input, "(\"[^\"]+\"|\\S+)" );
-            string[] result = new string[splits.Length -1];
-            Array.Copy( splits, 1, result, 0, result.Length );
+            var matches = Regex.Matches( input, "(\"[^\"]+\"|\\S+)" );
+            string[] result = new string[matches.Count - 1];
+            for (int i = 0; i < result.Length; i++)
+                result[i] = matches[i + 1].Value;
             return result;
         }
     }

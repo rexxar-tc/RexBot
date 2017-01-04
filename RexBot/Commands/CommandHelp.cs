@@ -13,7 +13,7 @@ namespace RexBot.Commands
         public bool IsPublic => true;
         public string Command => "!help";
         public string HelpText => "Shows help. !help with no argument lists commands. !help (command) shows help for that command.";
-        public string Handle( SocketMessage message )
+        public async Task<string> Handle( SocketMessage message )
         {
             StringBuilder sb = new StringBuilder();
 

@@ -12,6 +12,6 @@ namespace RexBot
         bool IsPublic { get; }
         string Command { get; }
         string HelpText { get; }
-        string Handle(SocketMessage message);
+        Task<string> Handle(SocketMessage message);
     }
 }

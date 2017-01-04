@@ -15,7 +15,7 @@ namespace RexBot.Commands
         public string Command => "!addcommand";
         public string HelpText => "Adds info command";
 
-        public string Handle(SocketMessage message)
+        public async Task<string> Handle(SocketMessage message)
         {
             var splits = Utilities.ParseCommand( message.Content );
             if (splits.Length > 4 || splits.Length < 2)
@@ -24,7 +24,7 @@ namespace RexBot.Commands
             }
 
             string newCommand = splits[0];
-            string response = splits[1];
+            string response = splits[1].Trim('"');
             bool isPublic = true;
             bool image = false;
 
