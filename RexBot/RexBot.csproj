@@ -166,10 +166,13 @@
     <Compile Include="Commands\ComandReload.cs" />
     <Compile Include="Commands\CommandAddCommand.cs" />
     <Compile Include="Commands\CommandAllInfo.cs" />
+    <Compile Include="Commands\CommandFixit.cs" />
     <Compile Include="Commands\CommandHelp.cs" />
+    <Compile Include="Commands\CommandMsg.cs" />
     <Compile Include="Commands\CommandRemoveCommand.cs" />
     <Compile Include="Commands\CommandRexStatus.cs" />
     <Compile Include="Commands\CommandStatus.cs" />
+    <Compile Include="Commands\CommandTest.cs" />
     <Compile Include="Commands\IChatCommand.cs" />
     <Compile Include="RexBotCore.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

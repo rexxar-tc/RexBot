@@ -17,5 +17,17 @@ namespace RexBot
                 result[i] = matches[i + 1].Value;
             return result;
         }
+
+        public static string StripCommand( IChatCommand command, string input )
+        {
+            try
+            {
+                return input.Substring(command.Command.Length + 1);
+            }
+            catch
+            {
+                return null;
+            }
+        }
     }
 }
