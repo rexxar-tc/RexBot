@@ -1,15 +1,19 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Discord.WebSocket;
 
-namespace RexBot
+namespace RexBot.Commands
 {
+    public enum CommandAccess
+    {
+        None,
+        Public,
+        Modder,
+        Developer,
+        Rexxar,
+    }
     public interface IChatCommand
     {
-        bool IsPublic { get; }
+        CommandAccess Access { get; }
         string Command { get; }
         string HelpText { get; }
         Task<string> Handle(SocketMessage message);

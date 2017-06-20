@@ -1,30 +1,28 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using Discord.WebSocket;
-using Discord1Test;
 
 namespace RexBot.Commands
 {
-    class CommandRemoveCommand : IChatCommand
+    internal class CommandRemoveCommand : IChatCommand
     {
-        public bool IsPublic => false;
+        public CommandAccess Access => CommandAccess.Modder;
         public string Command => "!removecommand";
-        public string HelpText => "Removes info command";
+        public string HelpText => "Removes info command. `!removecommand [!commandKey]";
+
         public async Task<string> Handle(SocketMessage message)
         {
             string target = message.Content.Substring(Command.Length + 1);
-            foreach (var info in RexBotCore.Instance.InfoCommands)
-            {
+            foreach (RexBotCore.InfoCommand info in RexBotCore.Instance.InfoCommands)
                 if (info.Command.Equals(target, StringComparison.CurrentCultureIgnoreCase))
                 {
+                    if (info.Author != message.Author.Id && !message.Author.IsRexxar())
+                        return "You can't remove a command added by another user!";
+
                     RexBotCore.Instance.InfoCommands.Remove(info);
                     RexBotCore.Instance.SaveCommands();
-                    return ($"Removing command {info.Command}");
+                    return $"Removing command {info.Command}";
                 }
-            }
 
             return $"Couldn't find {target}";
         }

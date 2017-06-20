@@ -1,31 +1,34 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
+using Discord;
 using Discord.WebSocket;
-using Discord1Test;
 
 namespace RexBot.Commands
 {
-    class CommandAllInfo : IChatCommand
+    internal class CommandAllInfo : IChatCommand
     {
-        public bool IsPublic => false;
+        public CommandAccess Access => CommandAccess.Rexxar;
         public string Command => "!allinfo";
         public string HelpText => "Dumps all info commands";
+
         public async Task<string> Handle(SocketMessage message)
         {
-            var channel = message.Channel;
-            foreach (var command in RexBotCore.Instance.InfoCommands)
-            {
+            ISocketMessageChannel channel = message.Channel;
+            foreach (RexBotCore.InfoCommand command in RexBotCore.Instance.InfoCommands)
                 if (!command.ImageResponse)
-                    await channel.SendMessageAsync(command.Response);
+                    await channel.SendMessageAsync($"{message.Author.Mention} {command.Response}");
                 else
-                    await channel.SendFileAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, command.Response));
-            }
-
+                {
+                    if (!command.Response.StartsWith("http"))
+                        await channel.SendFileAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, command.Response), message.Author.Mention);
+                    else
+                    {
+                        EmbedBuilder em = new EmbedBuilder();
+                        em.ImageUrl = command.Response;
+                        await channel.SendMessageAsync(message.Author.Mention, embed: em);
+                    }
+                }
             return string.Empty;
         }
     }

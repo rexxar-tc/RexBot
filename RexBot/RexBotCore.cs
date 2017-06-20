@@ -1,59 +1,22 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Dynamic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
-using System.Timers;
 using System.Xml.Serialization;
 using Discord;
+using Discord.Addons.EmojiTools;
 using Discord.WebSocket;
-using RexBot;
+using RexBot.Commands;
+using Timer = System.Timers.Timer;
 
-namespace Discord1Test
+namespace RexBot
 {
     public class RexBotCore
     {
-        [Serializable]
-        public struct Token
-        {
-            public string Name;
-            public string Value;
-            
-            public Token( string name, string value )
-            {
-                Name = name;
-                Value = value;
-            }
-        }
-
-        [Serializable]
-        public struct InfoCommand
-        {
-            public string Command;
-            public string Response;
-            public bool IsPublic;
-            public bool ImageResponse;
-
-            public InfoCommand( string command, string response, bool isPublic = true, bool imageResponse = false )
-            {
-                Command = command;
-                Response = response;
-                IsPublic = isPublic;
-                ImageResponse = imageResponse;
-            }
-        }
-        private static RexBotCore _instance;
-        public static RexBotCore Instance => _instance ?? (_instance = new RexBotCore());
-
-        private Random _random = new Random();
-
-        public DiscordSocketClient RexxarClient;
-        public DiscordSocketClient RexbotClient;
-
         private const string ASKING_RESPONSE = "It seems you're asking if you can ask a question, rexxar usually ignores these.\r\n" +
                                                "If you have a Space Engineers or SESE bug, please report it on the KSH forum.\r\n" +
                                                "If you have a question about how to use SESE, ask in the server admin text channel, one of the other users can help.\r\n" +
@@ -71,83 +34,123 @@ namespace Discord1Test
 
         public const long REXXAR_ID = 135116459675222016;
         public const long REXBOT_ID = 264301401801228289;
+        private static RexBotCore _instance;
 
-        private static readonly List<string> _statuses = new List<string>()
+        private static readonly List<string> _statuses = new List<string>
                                                          {
                                                              "Space Engineers",
                                                              "Medieval Engineers",
                                                              "Subnautica",
                                                              "Minecraft",
-                                                             "Minecraft in Space",
-                                                             "DAT ENGINEERING GAME",
-                                                             "With Marek <3",
-                                                             "With your heart",
+                                                             //"Minecraft in Space",
+                                                             //"DAT ENGINEERING GAME",
+                                                             //"With Marek <3",
+                                                             //"With your heart",
                                                              "Gone Home",
                                                              "Miner Wars",
                                                              "Naval Engineers",
                                                              "GoodAI",
+                                                             "Factorio",
+                                                             "Tomb Raider",
+                                                             "Goat Simulator",
+                                                             "Space Engineers 2",
                                                          };
 
-        private Timer _statusTimer = new Timer(20 * 60 * 1000);
+        private static List<ulong> _bannedUsers = new List<ulong>();
 
-        private List<InfoCommand> _infoCommands = new List<InfoCommand>();
-        private List<IChatCommand> _chatCommands = new List<IChatCommand>();
+        private Random _random = new Random();
 
-        public List<InfoCommand> InfoCommands { get { return _infoCommands; } }
-        public List<IChatCommand> ChatCommands { get { return _chatCommands; } }
+        public Dictionary<ulong, BugreportBuilder> BugBuilders = new Dictionary<ulong, BugreportBuilder>();
 
-        static void Main(string[] args) => Instance.Run().GetAwaiter().GetResult();
+
+        private readonly Timer _statusTimer = new Timer(20 * 60 * 1000);
+        public JiraManager Jira;
+        public Sheets PublicSheet;
+        public DiscordSocketClient RexbotClient;
+
+        public DiscordSocketClient RexxarClient;
+
+        public SocketGuild KeenGuild;
+
+        public Sheets CTGSheet;
+        public static RexBotCore Instance => _instance ?? (_instance = new RexBotCore());
+
+        public List<InfoCommand> InfoCommands { get; private set; } = new List<InfoCommand>();
+        public List<IChatCommand> ChatCommands { get; } = new List<IChatCommand>();
+
+        public List<ulong> BannedUsers
+        {
+            get { return _bannedUsers; }
+        }
+
+        public DBManager DBManager;
+
+        private static void Main(string[] args) => Instance.Run().GetAwaiter().GetResult();
 
         public async Task Run()
         {
             Console.WriteLine("Initializing...");
-            string filename = Path.Combine( AppDomain.CurrentDomain.BaseDirectory, "tokens.xml" );
-            if ( !File.Exists( filename ) )
-            {
-                Console.WriteLine( "Tokens file not found!" );
-                return;
-            }
-            List<Token> tokens;
-            using ( StreamReader reader = new StreamReader( filename ) )
-            {
-                Console.WriteLine( "Reading tokens..." );
-                XmlSerializer x = new XmlSerializer( typeof(List<Token>) );
-                tokens = (List<Token>)x.Deserialize( reader );
-                Console.WriteLine($"Found: {tokens.Count}.");
-                if(tokens.Count==2)
-                    Console.WriteLine("Ok.");
-                else
-                {
-                    throw new FileLoadException("Incorrect number of tokens!");
-                }
-                reader.Close();
-            }
+            Console.CancelKeyPress += Console_CancelKeyPress;
+            List<Token> tokens = LoadTokens();
             ScanAssemblyForCommands();
             LoadCommands();
             _statusTimer.Elapsed += async (sender, args) => await SetRandomStatus();
             _statusTimer.Start();
             await Login(tokens);
+            CTGSheet = new Sheets(tokens.First(t => t.Name == "CTGSheet").Value, true);
+            PublicSheet = new Sheets(tokens.First(t => t.Name == "PublicSheet").Value);
+            try
+            {
+                DBManager = new DBManager("KeenLog.db");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+            }
+            LoadBanned();
             await Task.Delay(-1);
         }
 
-        async Task<bool> Login(List<Token> tokens )
+        private void Console_CancelKeyPress(object sender, ConsoleCancelEventArgs e)
+        {
+            DBManager.Close();
+        }
+
+        private async Task<bool> Login(List<Token> tokens)
         {
             Console.WriteLine("Authenticating...");
             try
             {
                 if (RexxarClient == null)
                     RexxarClient = new DiscordSocketClient();
-                await RexxarClient.LoginAsync( TokenType.User, tokens.First( t => t.Name == "rexxar" ).Value);
-                await RexxarClient.ConnectAsync();
+                await RexxarClient.LoginAsync(TokenType.User, tokens.First(t => t.Name == "rexxar").Value);
+                await RexxarClient.StartAsync();
                 RexxarClient.MessageReceived += RexxarMessageReceived;
 
-                if(RexbotClient == null)
-                    RexbotClient = new DiscordSocketClient();
+                if (RexbotClient == null)
+                    RexbotClient = new DiscordSocketClient(new DiscordSocketConfig() {MessageCacheSize = 1000});
                 await RexbotClient.LoginAsync(TokenType.Bot, tokens.First(t => t.Name == "rexbot").Value);
-                await RexbotClient.ConnectAsync();
-                await SetRandomStatus();
-                RexbotClient.MessageReceived += RexbotMessageReceived;
+                await RexbotClient.StartAsync();
 
+                AutoResetEvent e = new AutoResetEvent(false);
+                RexbotClient.Ready += delegate
+                                      {
+                                          e.Set();
+                                          return Task.CompletedTask;
+                                      };
+
+                Console.WriteLine("Waiting for fucking Volt");
+                e.WaitOne();
+                Console.WriteLine("Waiting done.");
+                
+                await SetRandomStatus();
+                //await RexbotClient.SetGame( "Try !bugreport" );
+                RexbotClient.MessageReceived += RexbotMessageReceived;
+                RexbotClient.JoinedGuild += RexbotJoinedGuild;
+                KeenGuild = RexbotClient.GetGuild(125011928711036928);
+                
+                Jira = new JiraManager(tokens.First(t => t.Name == "JiraURL").Value, "rex.bot", tokens.First(t => t.Name == "JiraPass").Value);
+                
                 Console.WriteLine("Ready.");
             }
             catch (Exception ex)
@@ -159,82 +162,200 @@ namespace Discord1Test
             return true;
         }
 
+        private async Task RexbotJoinedGuild(SocketGuild arg)
+        {
+            Console.WriteLine($"Added to guild: '{arg.Name}'");
+            if (!arg.Users.Any(u => u.Id == REXXAR_ID))
+            {
+                Console.WriteLine("Rexxar not in this guild. Leaving.");
+                var chan = arg.DefaultChannel;
+                await chan.SendMessageAsync("You are not authorized to use this bot!");
+                await arg.LeaveAsync();
+            }
+        }
+
         public void SaveCommands()
         {
-            using (StreamWriter writer = new StreamWriter(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "InfoCommands.xml")))
+            using (var writer = new StreamWriter(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "InfoCommands.xml")))
             {
-                XmlSerializer x = new XmlSerializer(typeof(List<InfoCommand>));
-                x.Serialize(writer, _infoCommands);
+                var x = new XmlSerializer(typeof(List<InfoCommand>));
+                x.Serialize(writer, InfoCommands);
                 writer.Close();
             }
         }
 
         public void LoadCommands()
         {
-            Console.WriteLine("Loading info commands...");
-            using (StreamReader reader = new StreamReader(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "InfoCommands.xml")))
+            string filename = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "InfoCommands.xml");
+            if (!File.Exists(filename))
             {
-                XmlSerializer x = new XmlSerializer(typeof(List<InfoCommand>));
-                _infoCommands = (List<InfoCommand>)x.Deserialize(reader);
+                Console.WriteLine("InfoCommands file not found!");
+                InfoCommands = new List<InfoCommand>();
+                return;
+            }
+            Console.WriteLine("Loading info commands...");
+            using (var reader = new StreamReader(filename))
+            {
+                var x = new XmlSerializer(typeof(List<InfoCommand>));
+                InfoCommands = (List<InfoCommand>)x.Deserialize(reader);
                 reader.Close();
             }
-                Console.WriteLine($"Found: {_infoCommands.Count}.");
-                Console.WriteLine("Ok.");
+
+            Console.WriteLine($"Found: {InfoCommands.Count}.");
+            Console.WriteLine("Ok.");
+        }
+
+        public List<Token> LoadTokens()
+        {
+            string filename = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tokens.xml");
+            if (!File.Exists(filename))
+            {
+                Console.WriteLine("Tokens file not found!");
+                return null;
+            }
+            List<Token> tokens;
+            using (var reader = new StreamReader(filename))
+            {
+                Console.WriteLine("Reading tokens...");
+                var x = new XmlSerializer(typeof(List<Token>));
+                tokens = (List<Token>)x.Deserialize(reader);
+                Console.WriteLine($"Found: {tokens.Count}.");
+                if (tokens.Count >= 2)
+                    Console.WriteLine("Ok.");
+                else
+                    throw new FileLoadException("Incorrect number of tokens!");
+                reader.Close();
+            }
+
+            return tokens;
+        }
+
+        public void LoadBanned()
+        {
+            string filename = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BannedUsers.xml");
+            if (!File.Exists(filename))
+            {
+                Console.WriteLine("Banned users file not found.");
+                _bannedUsers = new List<ulong>();
+                return;
+            }
+
+            Console.WriteLine("Loading banned users...");
+            using (var reader = new StreamReader(filename))
+            {
+                var x = new XmlSerializer(typeof(List<ulong>));
+                _bannedUsers = (List<ulong>)x.Deserialize(reader);
+                reader.Close();
+            }
+
+            Console.WriteLine($"Found: {_bannedUsers.Count}.");
+            Console.WriteLine("Ok.");
+        }
+
+        public void SaveBanned()
+        {
+            using (var writer = new StreamWriter(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BannedUsers.xml")))
+            {
+                var x = new XmlSerializer(typeof(List<ulong>));
+                x.Serialize(writer, _bannedUsers);
+                writer.Close();
+            }
         }
 
         private void ScanAssemblyForCommands()
         {
             Console.WriteLine("Loading chat commands...");
-            var types = Assembly.GetCallingAssembly().DefinedTypes;
-            foreach (var type in types)
-            {
-                
+            IEnumerable<TypeInfo> types = Assembly.GetCallingAssembly().DefinedTypes;
+            foreach (TypeInfo type in types)
                 if (type.ImplementedInterfaces.Contains(typeof(IChatCommand)))
                 {
                     Console.WriteLine("Found: " + type.FullName);
-                    _chatCommands.Add((IChatCommand)Activator.CreateInstance(type));
+                    ChatCommands.Add((IChatCommand)Activator.CreateInstance(type));
                 }
-            }
         }
 
         private async Task RexbotMessageReceived(SocketMessage message)
         {
-            var channel = message.Channel;
+            ISocketMessageChannel channel = message.Channel;
 
-            if (message.Author.Id == REXBOT_ID)
+            if (message.Author.Id == REXBOT_ID || message.Author.Id == 186606257317085184)
                 return;
             
-            if ( message.MentionedUsers.Any( u => u.Id == REXBOT_ID ) )
+            if (_bannedUsers.Contains(message.Author.Id))
             {
-                await channel.SendMessageAsync( $"{message.Author.Mention} What do you want?!" );
+                //Console.WriteLine($"Responding to banned user {message.Author.Username}");
+                //await channel.SendMessageAsync($"{message.Author.Mention} You've been banned from using RexBot.");
                 return;
             }
 
-            foreach (var command in _infoCommands)
+            if (message.Author.Id == 142298196125679617 && Regex.IsMatch(message.Content, "chaff", RegexOptions.IgnoreCase))
             {
+                await message.Channel.SendMessageAsync($"{message.Author.Mention} ***REEEEEE***");
+            }
+
+            if (message.Author.IsBot)
+                return;
+
+            BugreportBuilder builder;
+            if (BugBuilders.TryGetValue(channel.Id, out builder))
+            {
+                await builder.Process(message);
+                if (builder.CurrentStep == BugreportBuilder.StepEnum.Finished)
+                    BugBuilders.Remove(channel.Id);
+                return;
+            }
+
+            //if ( message.MentionedUsers.Any( u => u.Id == REXBOT_ID ) )
+            //{
+            //    await channel.SendMessageAsync( $"{message.Author.Mention} What do you want?!" );
+            //    return;
+            //}
+
+            foreach (InfoCommand command in InfoCommands)
                 if (message.Content.Equals(command.Command, StringComparison.CurrentCultureIgnoreCase))
                 {
+                    if (_bannedUsers.Contains(message.Author.Id))
+                    {
+                        Console.WriteLine($"Responding to banned user {message.Author.Username}");
+                        await channel.SendMessageAsync($"{message.Author.Mention} You've been banned from using RexBot.");
+                        return;
+                    }
+
                     Console.WriteLine($"{DateTime.Now} [{channel.ServerName()}: {channel.Name}] {message.Author.Username}: {message.Content}");
-                    if (!command.IsPublic && message.Author.Id != REXXAR_ID)
+                    if (!command.IsPublic && (message.Author.Id != REXXAR_ID))
                     {
                         await channel.SendMessageAsync($"{message.Author.Mention} You aren't allowed to use that command!");
                         break;
                     }
-                    Console.WriteLine("Responding: " + command.Response );
+                    Console.WriteLine("Responding: " + command.Response);
                     if (!command.ImageResponse)
                         await channel.SendMessageAsync($"{message.Author.Mention} {command.Response}");
                     else
-                        await channel.SendFileAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, command.Response));
+                    {
+                        if (!command.Response.StartsWith("http"))
+                            await channel.SendFileAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, command.Response), message.Author.Mention);
+                        else
+                        {
+                            EmbedBuilder em = new EmbedBuilder();
+                            em.ImageUrl = command.Response;
+                            await channel.SendMessageAsync(message.Author.Mention, embed: em);
+                        }
+                    }
                 }
-            }
-            
+
             string messageLower = message.Content.ToLower();
-            foreach (var command in _chatCommands)
-            {
+            foreach (IChatCommand command in ChatCommands)
                 if (messageLower.StartsWith(command.Command))
                 {
+                    if (_bannedUsers.Contains(message.Author.Id))
+                    {
+                        Console.WriteLine($"Responding to banned user {message.Author.Username}");
+                        await channel.SendMessageAsync($"{message.Author.Mention} You've been banned from using RexBot.");
+                        return;
+                    }
+
                     Console.WriteLine($"{DateTime.Now} [{channel.ServerName()}: {channel.Name}] {message.Author.Username}: {message.Content}");
-                    if (!command.IsPublic && message.Author.Id != REXXAR_ID)
+                    if (!command.HasAccess(message.Author))
                     {
                         Console.WriteLine("Not Authorized");
                         await channel.SendMessageAsync($"{message.Author.Mention} You aren't allowed to use that command!");
@@ -255,94 +376,188 @@ namespace Discord1Test
                     if (!string.IsNullOrEmpty(response))
                         await channel.SendMessageAsync($"{message.Author.Mention} {response}");
                 }
+
+            if (_bannedUsers.Contains(message.Author.Id))
+            {
+                //Console.WriteLine($"Responding to banned user {message.Author.Username}");
+                //await channel.SendMessageAsync($"{message.Author.Mention} You've been banned from using RexBot.");
+                return;
             }
 
-            if (message.MentionedUsers.Any(u => u.Id == REXXAR_ID))
+            if (Regex.IsMatch(message.Content, @"water in SE|water in space engineers", RegexOptions.IgnoreCase))
             {
-                if (Regex.IsMatch(message.Content, @"fix.*it", RegexOptions.IgnoreCase))
-                {
-                    Console.WriteLine($"{DateTime.Now}: [{channel.ServerName()}: {channel.Name}] {message.Author.Username}: {message.Content}");
-                    await channel.SendMessageAsync($"{message.Author.Mention} {FIXIT_RESPONSE}");
-                }
+                await channel.SendMessageAsync(message.Author.Mention + " There are no plans to implement (liquid) water of any kind in Space Engineers.");
             }
+            if (Regex.IsMatch(message.Content, @"water in ME|water in medieval engineers", RegexOptions.IgnoreCase))
+            {
+                await channel.SendMessageAsync(message.Author.Mention + " There are no plans to implement water of any kind in Medieval Engineers.");
+            }
+            //if (message.MentionedUsers.Any(u => u.Id == REXXAR_ID))
+            //{
+            //    if (Regex.IsMatch(message.Content, @"fix.*it", RegexOptions.IgnoreCase))
+            //    {
+            //        Console.WriteLine($"{DateTime.Now}: [{channel.ServerName()}: {channel.Name}] {message.Author.Username}: {message.Content}");
+            //        await channel.SendMessageAsync($"{message.Author.Mention} {FIXIT_RESPONSE}");
+            //    }
+            //}
         }
 
         private async Task RexxarMessageReceived(SocketMessage message)
         {
-            var channel = message.Channel;
+            ISocketMessageChannel channel = message.Channel;
 
-            if (channel.Id == 269660270769471488)
-            {
-                var guild = ((SocketGuildChannel)channel).Guild;
-                var kappa = guild.Emojis.First(e => e.Name.Contains("Kappa"));
-                await ((SocketUserMessage)message).AddReactionAsync(kappa.Name);
-            }
+            //if (channel.Id == 269660270769471488)
+            //{
+            //    await ((SocketUserMessage)message).AddReactionAsync(":xocKappa:269884941502775306");
+            //}
 
             if (message.Author.Id == RexxarClient.CurrentUser.Id)
-            {
                 return;
-            }
 
             bool asking = Regex.IsMatch(message.Content, @"can.*ask.*question|have.*question", RegexOptions.IgnoreCase);
             if (!(channel is SocketGuildChannel))
             {
-                var messages = await channel.GetMessagesAsync().Flatten();
-                if (messages.Count() < 2 || asking)
+                IEnumerable<IMessage> messages = await channel.GetMessagesAsync().Flatten();
+                int count = messages.Count();
+                if (((count < 2) || asking) && (count < 20))
                 {
                     Console.WriteLine($"Recieved message from {message.Author.Username}. Asking: {(asking ? "true" : "false")} Responding...");
                     await channel.SendMessageAsync(INTRO_MSG);
                     await channel.SendMessageAsync(asking ? ASKING_RESPONSE : FIRST_RESPONSE);
-                    return;
                 }
             }
-            if (message.MentionedUsers.Any(u => u.Id == RexxarClient.CurrentUser.Id) && asking)
-            {
-                Console.WriteLine($"{DateTime.Now}: [{channel.ServerName()}: {channel.Name}] {message.Author.Username}: {message.Content}");
-                    Console.WriteLine("Responding in DM");
-                    var chan = await message.Author.CreateDMChannelAsync();
-                    await chan.SendMessageAsync(INTRO_MSG);
-                    await chan.SendMessageAsync(ASKING_RESPONSE);
-                
-            }
+
+
+            //if (message.MentionedUsers.Any(u => u.Id == RexxarClient.CurrentUser.Id) && asking)
+            //{
+            //    Console.WriteLine($"{DateTime.Now}: [{channel.ServerName()}: {channel.Name}] {message.Author.Username}: {message.Content}");
+            //        Console.WriteLine("Responding in DM");
+            //        var chan = await message.Author.CreateDMChannelAsync();
+            //        await chan.SendMessageAsync(INTRO_MSG);
+            //        await chan.SendMessageAsync(ASKING_RESPONSE);
+
+            //}
+        }
+
+        public string GetRandomEmoji()
+        {
+            return $":{EmojiMap.Map.RandomElement().Key}:";
         }
 
         public async Task<string> SetRandomStatus()
         {
             string status = _statuses.RandomElement();
             Console.WriteLine($"Setting status to random entry: {status}");
-            await RexbotClient.SetGame(status);
+            await RexbotClient.SetGameAsync(status);
             return status;
         }
-    }
 
-    public static class Extensions
-    {
-        private static Random _random = new Random();
-        public static string ServerName( this ISocketMessageChannel channel )
+        public async Task GetMissingHistory()
         {
-            var guildChannel = channel as SocketGuildChannel;
-            return guildChannel?.Guild.Name ?? "Private";
-        }
+            bool cancel;
+            long count = 0;
+            bool updating = true;
+            long minDate = long.MaxValue;
+            long minDateLocal = long.MaxValue;
+            List<IMessage> _messages = new List<IMessage>();
+            ISocketMessageChannel _currentChannel = null;
 
-        public static T RandomElement<T>(this List<T> input)
-        {
-            if (input.Count == 1)
-                return input[0];
-            if (input.Count == 0)
-                return default(T);
-            int index = _random.Next(0, input.Count - 1);
-            return input[index];
-        }
+            Timer timer = new Timer(60 * 1000);
 
-        public static IEnumerable<TSource> DistinctBy<TSource, TKey> (this IEnumerable<TSource> source, Func<TSource, TKey> keySelector)
-        {
-            HashSet<TKey> seenKeys = new HashSet<TKey>();
-            foreach (TSource element in source)
+            SocketGuild server = RexBotCore.Instance.RexbotClient.GetGuild(125011928711036928);
+
+            if (server == null)
+                throw new Exception("fuck you and your cow");
+            
+            var channels = server.TextChannels;
+
+            foreach (var c in channels)
             {
-                if (seenKeys.Add(keySelector(element)))
+                try
                 {
-                    yield return element;
+                    var channel = c as ISocketMessageChannel;
+                    if (channel == null)
+                        continue;
+
+                    Console.WriteLine($"Switching to {channel.Name}");
+
+                    var users = await channel.GetUsersAsync().Flatten();
+                    if (!users.Any(u => u.Id == RexBotCore.REXBOT_ID))
+                    {
+                        Console.WriteLine("No permission here :(");
+                        continue;
+                    }
+
+                    _currentChannel = channel;
+                    var oldest = RexBotCore.Instance.DBManager.GetOldestMessageID(c.Id);
+                    IMessage oldestMsg = null;
+                    if (oldest > 0)
+                        oldestMsg = await c.GetMessageAsync(oldest);
+                    IEnumerable<IMessage> tmp;
+                    if (oldestMsg != null)
+                        tmp = await channel.GetMessagesAsync(oldestMsg.Id, Direction.Before).Flatten();
+                    else
+                        tmp = await channel.GetMessagesAsync().Flatten();
+                    minDateLocal = long.MaxValue;
+                    while (true)
+                    {
+                        if (!tmp.Any())
+                            break;
+                        foreach (var msg in tmp)
+                        {
+                            //RexBotCore.Instance.DBManager.AddMessage(msg);
+                            lock (_messages)
+                                _messages.Add(msg);
+                            count++;
+                            if (DateTime.UtcNow - msg.Timestamp.UtcDateTime > TimeSpan.FromDays(7))
+                                break;
+                        }
+
+                        tmp = await channel.GetMessagesAsync(tmp.First(m => m.Timestamp.UtcTicks == tmp.Min(n => n.Timestamp.UtcTicks)).Id, Direction.Before).Flatten();
+                        if (!tmp.Any())
+                            break;
+                        //Thread.Sleep(500);
+                    }
                 }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex);
+                }
+            }
+
+            Console.WriteLine($"Found {_messages.Count} messages");
+            RexBotCore.Instance.DBManager.AddMessages(_messages);
+        }
+
+        [Serializable]
+        public struct Token
+        {
+            public string Name;
+            public string Value;
+
+            public Token(string name, string value)
+            {
+                Name = name;
+                Value = value;
+            }
+        }
+
+        [Serializable]
+        public struct InfoCommand
+        {
+            public string Command;
+            public string Response;
+            public bool IsPublic;
+            public bool ImageResponse;
+            public ulong Author;
+
+            public InfoCommand(string command, string response, ulong author, bool isPublic = true, bool imageResponse = false)
+            {
+                Command = command;
+                Response = response;
+                Author = author;
+                IsPublic = isPublic;
+                ImageResponse = imageResponse;
             }
         }
     }
