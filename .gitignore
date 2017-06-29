@@ -2,5 +2,4 @@
 packages/
 RexBot/bin/
 RexBot/obj/
-RexBot/Properties/
 RexBot/client_secret.json
