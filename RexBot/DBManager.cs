@@ -105,10 +105,14 @@ namespace RexBot
                 ExecuteNonQuery($"create table K{msg.Channel.Id} (authorId INTEGER, messageId INTEGER, timestamp INTEGER, message TEXT, edit TEXT, deleted INT, attachment TEXT, unique (messageId));");
             }
 
+            SQLiteParameter[] parameters =
+            {
+                new SQLiteParameter("@messagetext", msg.Content)
+            };
             if (msg.Attachments.Any())
-                ExecuteNonQuery($"insert into K{msg.Channel.Id} (authorId, messageId, timestamp, message, deleted, edit, attachment) values ({msg.Author.Id}, {msg.Id}, {msg.Timestamp.UtcTicks}, '{msg.Content.Replace("'","''")}', 0, '{string.Join(", ", msg.Attachments.Select(a=>a.Url))}', ' ')");
+                ExecuteNonQuery($"insert into K{msg.Channel.Id} (authorId, messageId, timestamp, message, deleted, edit, attachment) values ({msg.Author.Id}, {msg.Id}, {msg.Timestamp.UtcTicks}, @messagetext, 0, ' ', '{string.Join(", ", msg.Attachments.Select(a=>a.Url))}')", parameters);
             else
-                ExecuteNonQuery($"insert into K{msg.Channel.Id} (authorId, messageId, timestamp, message, deleted, edit) values ({msg.Author.Id}, {msg.Id}, {msg.Timestamp.UtcTicks}, '{msg.Content.Replace("'", "''")}', 0, ' ')");
+                ExecuteNonQuery($"insert into K{msg.Channel.Id} (authorId, messageId, timestamp, message, deleted, edit) values ({msg.Author.Id}, {msg.Id}, {msg.Timestamp.UtcTicks}, @messagetext, 0, ' ')", parameters);
         }
 
         public void AddMessage(IMessage msg)
@@ -116,11 +120,14 @@ namespace RexBot
             if ((msg.Channel as SocketGuildChannel)?.Guild.Id != 125011928711036928)
                 return;
 
-
+            SQLiteParameter[] parameters =
+            {
+                new SQLiteParameter("@messagetext", msg.Content)
+            };
             if (msg.Attachments.Any())
-                ExecuteNonQuery($"insert or ignore into K{msg.Channel.Id} (authorId, messageId, timestamp, message, deleted, edit, attachment) values ({msg.Author.Id}, {msg.Id}, {msg.Timestamp.UtcTicks}, '{msg.Content.Replace("'", "''")}', 0, '{string.Join(", ", msg.Attachments.Select(a => a.Url))}', ' ')");
+                ExecuteNonQuery($"insert or ignore into K{msg.Channel.Id} (authorId, messageId, timestamp, message, deleted, edit, attachment) values ({msg.Author.Id}, {msg.Id}, {msg.Timestamp.UtcTicks}, @messagetext, 0, ' ', '{string.Join(", ", msg.Attachments.Select(a => a.Url))}')", parameters);
             else
-                ExecuteNonQuery($"insert or ignore into K{msg.Channel.Id} (authorId, messageId, timestamp, message, deleted, edit) values ({msg.Author.Id}, {msg.Id}, {msg.Timestamp.UtcTicks}, '{msg.Content.Replace("'", "''")}', 0, ' ')");
+                ExecuteNonQuery($"insert or ignore into K{msg.Channel.Id} (authorId, messageId, timestamp, message, deleted, edit) values ({msg.Author.Id}, {msg.Id}, {msg.Timestamp.UtcTicks}, @messagetext, 0, ' ')", parameters);
         }
 
         public void AddMessages(IEnumerable<IMessage> messages)
@@ -182,12 +189,37 @@ namespace RexBot
                 throw;
             }
         }
+        public int ExecuteNonQuery(string command, SQLiteParameter[] parameters)
+        {
+            try
+            {
+                var sql = new SQLiteCommand(command, _dbConnection);
+                sql.Parameters.AddRange(parameters);
+                var num = sql.ExecuteNonQuery();
+                //Console.WriteLine($"{num} rows affected by command {command}");
+                return num;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Bad command?");
+                Console.WriteLine(command);
+                Console.WriteLine(ex);
+                throw;
+            }
+        }
 
         public SQLiteDataReader ExecuteQuery(string command)
         {
             var tableCmd = new SQLiteCommand(command, _dbConnection);
             return tableCmd.ExecuteReader();
         }
+        public SQLiteDataReader ExecuteQuery(string command, SQLiteParameter[] parameters)
+        {
+            var tableCmd = new SQLiteCommand(command, _dbConnection);
+            tableCmd.Parameters.AddRange(parameters);
+            return tableCmd.ExecuteReader();
+        }
+
 
         #endregion
     }
