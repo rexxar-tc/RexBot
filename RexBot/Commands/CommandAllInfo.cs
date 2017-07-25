@@ -11,6 +11,7 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Rexxar;
         public string Command => "!allinfo";
         public string HelpText => "Dumps all info commands";
+        public Embed HelpEmbed { get; }
 
         public async Task<string> Handle(SocketMessage message)
         {

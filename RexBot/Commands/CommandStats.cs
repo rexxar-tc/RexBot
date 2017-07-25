@@ -14,6 +14,7 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Public;
         public string Command => "!stats";
         public string HelpText => "Gets post statistics for a channel or user. Usage: `!stats @rexxar` or `!stats #general`";
+        public Embed HelpEmbed { get; }
 
         public async Task<string> Handle(SocketMessage message)
         {

@@ -1,4 +1,5 @@
 ﻿using System.Threading.Tasks;
+using Discord;
 using Discord.WebSocket;
 
 namespace RexBot.Commands
@@ -8,6 +9,7 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Developer;
         public string Command => "!status";
         public string HelpText => "Sets RexBot's current game";
+        public Embed HelpEmbed { get; }
 
         public async Task<string> Handle(SocketMessage message)
         {

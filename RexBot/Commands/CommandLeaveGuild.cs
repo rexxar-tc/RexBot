@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Discord;
 using Discord.WebSocket;
 
 namespace RexBot.Commands
@@ -12,6 +13,8 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Rexxar;
         public string Command => "!leaveguild";
         public string HelpText => "Removes rexbot from the target guild";
+        public Embed HelpEmbed { get; }
+
         public async Task<string> Handle(SocketMessage message)
         {
             var arg = Utilities.StripCommand(this, message.Content);

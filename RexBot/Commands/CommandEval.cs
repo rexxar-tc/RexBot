@@ -9,6 +9,7 @@ using System.Runtime;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Discord;
 using Discord.WebSocket;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -22,6 +23,8 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Rexxar;
         public string Command => "!eval";
         public string HelpText => "Runs the given code";
+        public Embed HelpEmbed { get; }
+
         public async Task<string> Handle(SocketMessage message)
         {
             string arg = Utilities.StripCommand(this, message.Content);
@@ -32,33 +35,22 @@ namespace RexBot.Commands
                 code = code.Substring(0, code.Length -3);
             }
 
-            var op = ScriptOptions.Default;
-            op.AddReferences(SelectAssemblies());
-            //op.AddImports("System", "System.Collections.Generic", "System.Timers", "System.Linq", "RexBot");
-            var res = await CSharpScript.EvaluateAsync<object>(code,op,new Globals(message));
-            GC.Collect();
-            
-            return res?.ToString();
+            try
+            {
+                var res = await ScriptManager.ExecuteScript(code, message);
+                return res.ToString();
+            }
+            catch (CompilationErrorException ex)
+            {
+                return $"Error executing script!" +
+                       $"```" +
+                       $"{ex.Message}```";
+            }
             //var sc = CSharpScript.Create(code, null, typeof(Globals));
             //var res = sc.e(new Globals(message)).Result;
 
             //return res.ReturnValue.ToString();
         }
-        private static IEnumerable<Assembly> SelectAssemblies()
-        {
-            return AppDomain.CurrentDomain.GetAssemblies().Where(a => !a.IsDynamic).Where(a => !string.IsNullOrWhiteSpace(a.Location));
-        }
 
     }
-        public class Globals
-        {
-            public SocketMessage Message;
-            public RexBotCore BotCore;
-
-            public Globals(SocketMessage message)
-            {
-                Message = message;
-                BotCore = RexBotCore.Instance;
-            }
-        }
 }

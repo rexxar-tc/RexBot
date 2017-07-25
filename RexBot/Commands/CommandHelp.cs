@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Discord;
 using Discord.WebSocket;
 
 namespace RexBot.Commands
@@ -11,26 +12,39 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Public;
         public string Command => "!help";
         public string HelpText => "Shows help. !help with no argument lists commands. !help (command) shows help for that command.";
+        public Embed HelpEmbed { get; }
 
         public async Task<string> Handle(SocketMessage message)
         {
-            var sb = new StringBuilder();
-
             bool isRexxar = message.Author.Id == RexBotCore.REXXAR_ID;
+            if (message.Channel.Id != 263612647579189248)
+                isRexxar = false;
 
             if (message.Content.Length == Command.Length)
             {
-                sb.AppendLine("Available commands:```");
-                foreach (RexBotCore.InfoCommand info in RexBotCore.Instance.InfoCommands)
-                    if (info.IsPublic || isRexxar)
-                        sb.Append($"{info.Command}, ");
-
-                foreach (IChatCommand command in RexBotCore.Instance.ChatCommands)
-                    if (command.HasAccess(message.Author))
-                        sb.Append($"{command.Command}, ");
-                sb.Remove(sb.Length - 2, 2);
-                sb.AppendLine("```");
-                sb.Append("Use `!help [command] for more info`");
+                var em = new EmbedBuilder();
+                em.Fields.Add(new EmbedFieldBuilder()
+                              {
+                    IsInline = false,
+                                  Name = "Info commands",
+                                  Value = string.Join(", ", RexBotCore.Instance.InfoCommands.Where(i => i.Author == RexBotCore.REXXAR_ID && (i.IsPublic || isRexxar)).Select(j => j.Command))
+                              });
+                em.Fields.Add(new EmbedFieldBuilder()
+                              {
+                                  IsInline=false,
+                                  Name = "User commands",
+                    Value = string.Join(", ", RexBotCore.Instance.InfoCommands.Where(i => i.Author != RexBotCore.REXXAR_ID && (i.IsPublic || isRexxar)).Select(j => j.Command))
+                });
+                em.Fields.Add(new EmbedFieldBuilder()
+                              {
+                                  IsInline = false,
+                                  Name = "System commands",
+                                  Value = string.Join(", ", RexBotCore.Instance.ChatCommands.Where(c => c.HasAccess(message.Author)).Where(c => c.Access < CommandAccess.Rexxar || isRexxar).Select(c => c.Command))
+                              });
+                em.Color = new Color(102, 153, 255);
+               
+                await message.Channel.SendMessageAsync($"{message.Author.Mention} Use `!help [command]` for more info", embed: em);
+                return null;
             }
             else
             {
@@ -40,7 +54,24 @@ namespace RexBot.Commands
                 IChatCommand command = RexBotCore.Instance.ChatCommands.FirstOrDefault(c => c.Command.Equals(search, StringComparison.CurrentCultureIgnoreCase));
                 if (command != null)
                     if (command.HasAccess(message.Author))
-                        return command.HelpText;
+                    {
+                        if (command.HelpEmbed == null)
+                        {
+                            var em = new EmbedBuilder();
+                            em.Fields.Add(new EmbedFieldBuilder()
+                                          {
+                                              IsInline = false,
+                                              Name = command.Command,
+                                              Value = command.HelpText
+                                          });
+                            await message.Channel.SendMessageAsync(message.Author.Mention, embed: em);
+                        }
+                        else
+                        {
+                            await message.Channel.SendMessageAsync(message.Author.Mention, embed: command.HelpEmbed);
+                        }
+                        return null;
+                    }
                     else
                         return "You aren't allowed to use that command!";
 
@@ -56,8 +87,6 @@ namespace RexBot.Commands
 
                 return $"Couldn't find command `{search}`";
             }
-
-            return sb.ToString();
         }
     }
 }

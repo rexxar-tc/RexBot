@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Discord;
 using Discord.WebSocket;
 
 namespace RexBot.Commands
@@ -14,6 +15,7 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Rexxar;
         public string Command => "!update";
         public string HelpText => "Updates RexBot";
+        public Embed HelpEmbed { get; }
 
         private const string BAT = @"@ECHO OFF
 SLEEP 20
@@ -34,8 +36,12 @@ RexBot.exe";
 
             File.Copy(@"\\192.168.1.141\e\GitHub\RexBot\RexBot\bin\Debug\RexBot.exe", Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "RexBot.new"));
 
-            File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "update.bat"), BAT);
-            Process.Start(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "update.bat"));
+            string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "update.bat");
+
+            if (!File.Exists(path))
+                File.WriteAllText(path, BAT);
+
+            Process.Start(path);
             Environment.Exit(1);
             return "Goodbye.";
         }

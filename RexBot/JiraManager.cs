@@ -12,6 +12,7 @@ using Atlassian.Jira;
 using Discord;
 using Discord.WebSocket;
 using ProtoBuf;
+using RexBot.Commands;
 using Attachment = Discord.Attachment;
 using Timer = System.Timers.Timer;
 
@@ -92,12 +93,14 @@ namespace RexBot
     {
         public enum ProjectKey
         {
+            Invalid,
             SE,
-            ME
+            ME,
         }
 
         private const string REXBOT_SPRINT = "114"; //magic, do not touch
-        private const string REXBOT_EPIC = "SE-3591";
+        private const string REXBOT_SE_EPIC = "SE-3591";
+        private const string REXBOT_ME_EPIC = "ME-2092";
         private const string METADATA_TAG = "REXBOT METADATA:";
         public List<CachedIssue> CachedIssues;
         public List<ProjectVersion> CachedVersions;
@@ -107,15 +110,20 @@ namespace RexBot
         public JiraManager(string URL, string username, string password)
         {
             Console.WriteLine("Initializing Jira...");
-            jira = Jira.CreateRestClient(URL, username, password);
+            jira = Jira.CreateRestClient(URL, username, password/*, new JiraRestClientSettings() {EnableRequestTrace = true}*/);
             CachedIssues = new List<CachedIssue>();
             Task.Run(() =>
                      {
                          try
                          {
+                             var ps =jira.Projects.GetProjectsAsync().Result;
+                             Console.WriteLine(string.Join(", ", ps.Select(pq => pq.Key)));
                              var p = jira.Projects.GetProjectAsync("SE").Result;
                              CachedVersions = p.GetVersionsAsync().Result.ToList();
+                             p = jira.Projects.GetProjectAsync("ME").Result;
+                             CachedVersions.AddRange(p.GetVersionsAsync().Result);
                              Console.WriteLine($"Got {CachedVersions.Count} Versions");
+                             Console.WriteLine(string.Join(", ", CachedVersions.Select(v => v.Name)));
                              CachedIssues = GetIssues();
                          }
                          catch (Exception ex)
@@ -136,17 +144,14 @@ namespace RexBot
             {
                 var p = await jira.Projects.GetProjectAsync("SE");
                 CachedVersions = (await p.GetVersionsAsync()).ToList();
+                p = jira.Projects.GetProjectAsync("ME").Result;
+                CachedVersions.AddRange(p.GetVersionsAsync().Result);
                 var oldIssues = new List<CachedIssue>(CachedIssues);
                 CachedIssues.Clear();
                 CachedIssues = GetIssues();
 
                 if (oldIssues.Count == 0)
                     oldIssues = CachedIssues;
-
-                await RexBotCore.Instance.PublicSheet.EmptyPage("Public List");
-                await RexBotCore.Instance.PublicSheet.EmptyPage("Old Reports");
-                await RexBotCore.Instance.CTGSheet.EmptyPage("CTG Reports");
-                await RexBotCore.Instance.CTGSheet.EmptyPage("Old Reports");
 
                 IList<IList<object>>[] data = new IList<IList<object>>[4];
 
@@ -159,7 +164,7 @@ namespace RexBot
                     {
                         var oldIssue = oldIssues.FirstOrDefault(i => i.Key == newIssue.Key);
 
-                        Console.WriteLine($"{DateTime.Now}: {oldIssue.Key}");
+                        //Console.WriteLine($"{DateTime.Now}: {oldIssue.Key}");
                         var comments = await oldIssue.Issue.GetCommentsAsync();
                         var sb = new StringBuilder();
                         foreach (var comment in comments)
@@ -181,12 +186,12 @@ namespace RexBot
 
                         var row = new List<object>
                                   {
-                                           oldIssue.Issue.Key.Value,
-                                           oldIssue.Metadata.ReporterName,
-                                           oldIssue.Issue.Created.Value.ToString(),
-                                           desc,
-                                           oldIssue.Issue.Status.Name,
-                                           sb.ToString()
+                                      oldIssue.Issue.Key.Value,
+                                      oldIssue.Metadata.ReporterName,
+                                      oldIssue.Issue.Created.Value.ToString(),
+                                      desc,
+                                      oldIssue.Issue.Status.Name,
+                                      sb.ToString()
                                   };
 
                         if (oldIssue.Metadata.IsCTG || Utilities.CTGChannels.Contains(oldIssue.Metadata.ReporterChannel))
@@ -224,10 +229,28 @@ namespace RexBot
                     }
                 }
 
-                await RexBotCore.Instance.PublicSheet.AppendRows("Public List", data[0]);
-                await RexBotCore.Instance.PublicSheet.AppendRows("Old Reports", data[1]);
-                await RexBotCore.Instance.CTGSheet.AppendRows("CTG Reports", data[2]);
-                await RexBotCore.Instance.CTGSheet.AppendRows("Old Reports", data[3]);
+
+                //TODO: Put ME reports in their own sheet or page
+                if (data[0].Any())
+                {
+                    await RexBotCore.Instance.PublicSheet.EmptyPage("Public List");
+                    await RexBotCore.Instance.PublicSheet.AppendRows("Public List", data[0]);
+                }
+                if (data[1].Any())
+                {
+                    await RexBotCore.Instance.PublicSheet.EmptyPage("Old Reports");
+                    await RexBotCore.Instance.PublicSheet.AppendRows("Old Reports", data[1]);
+                }
+                if (data[2].Any())
+                {
+                    await RexBotCore.Instance.CTGSheet.EmptyPage("CTG Reports");
+                    await RexBotCore.Instance.CTGSheet.AppendRows("CTG Reports", data[2]);
+                }
+                if (data[3].Any())
+                {
+                    await RexBotCore.Instance.CTGSheet.EmptyPage("Old Reports");
+                    await RexBotCore.Instance.CTGSheet.AppendRows("Old Reports", data[3]);
+                }
             }
             catch (Exception ex)
             {
@@ -295,7 +318,7 @@ namespace RexBot
             }
         }
 
-        public async Task<string> AddIssue(ProjectKey project, string description, string version, IssueMetadata meta, IReadOnlyCollection<Attachment> attachments = null)
+        public async Task<string> AddIssue(ProjectKey project, string description, string version, IssueMetadata meta, Dictionary<Attachment, string> attachments = null)
         {
             string summary;
             if (description.Length > 50)
@@ -308,13 +331,10 @@ namespace RexBot
             return await AddIssue(project, summary, description, version, meta, attachments);
         }
 
-        public async Task<string> AddIssue(ProjectKey project, string summary, string description, string version, IssueMetadata meta, IReadOnlyCollection<Attachment> attachments = null)
+        public async Task<string> AddIssue(ProjectKey project, string summary, string description, string version, IssueMetadata meta, Dictionary<Attachment, string> attachments = null)
         {
-            if (project == ProjectKey.ME)
-                return null; //Tim doesn't love us enough :(
             try
             {
-                
                 Issue issue = jira.CreateIssue(project.ToString());
                 //issue["Sprint"] = REXBOT_SPRINT;
                 issue.Type = "Bug";
@@ -323,8 +343,19 @@ namespace RexBot
                                     $"Reported by: {meta.ReporterName}\r\n" +
                                     $"CTG: {meta.IsCTG}\r\n\r\n" +
                                     $"{METADATA_TAG};{meta.Serialize()};";
-               
-                issue["Epic Link"] = REXBOT_EPIC;
+
+                switch (project)
+                {
+                    case ProjectKey.SE:
+                        issue["Epic Link"] = REXBOT_SE_EPIC;
+                        break;
+                    case ProjectKey.ME:
+                        issue["Epic Link"] = REXBOT_ME_EPIC;
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(project), project, null);
+                }
+
                 if (!string.IsNullOrEmpty(version))
                     issue.AffectsVersions.Add(version);
 
@@ -332,16 +363,37 @@ namespace RexBot
 
                 if (attachments != null)
                 {
-                    Parallel.ForEach(attachments, a =>
-                                                  {
-                                                      using (var client = new WebClient())
-                                                      {
-                                                          client.DownloadFile(a.Url, a.Filename);
-                                                      }
-                                                  });
-                    issue.AddAttachment(attachments.Select(a => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, a.Filename)).ToArray());
-                    foreach (Attachment attachment in attachments)
-                        File.Delete(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, attachment.Filename));
+                    //Parallel.ForEach(attachments, a =>
+                    //                              {
+                    //                                  using (var client = new WebClient())
+                    //                                  {
+                    //                                      client.DownloadFile(a.Key.Url, a.Key.Filename);
+                    //                                  }
+                    //                              });
+                    //issue.AddAttachment();
+                    //issue.AddAttachment(attachments.Select(a => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, a.Filename)).ToArray());
+                    //foreach (Attachment attachment in attachments)
+                    //    File.Delete(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, attachment.Filename));
+                    using (var client = new WebClient())
+                    {
+                        foreach (var e in attachments)
+                        {
+                            var b = client.DownloadData(e.Key.Url);
+                            string name;
+                            if (string.IsNullOrEmpty(e.Value))
+                                name = e.Key.Filename;
+                            else
+                            {
+                                name = e.Value;
+                                int ind = e.Key.Filename.LastIndexOf('.');
+                                if (ind == -1)
+                                    name = e.Key.Filename;
+                                else
+                                    name += e.Key.Filename.Substring(ind);
+                            }
+                            issue.AddAttachment(name, b);
+                        }
+                    }
                 }
 
                 CachedIssues.Add(new CachedIssue(issue, meta));
@@ -354,7 +406,7 @@ namespace RexBot
             }
         }
 
-        public enum CommentAddResult
+        public enum JiraActionResult
         {
             Error,
             Ok,
@@ -362,7 +414,7 @@ namespace RexBot
             NotAuthorized,
         }
 
-        public async Task<CommentAddResult> AddComment(string issueKey, string comment, SocketMessage message)
+        public async Task<JiraActionResult> AddComment(string issueKey, string comment, SocketMessage message)
         {
             try
             {
@@ -377,7 +429,7 @@ namespace RexBot
                 }
 
                 if(issue == null)
-                    return CommentAddResult.NotFound;
+                    return JiraActionResult.NotFound;
 
                 //var m = GetMetadata(issue);
                 //if(m.ReporterId != message.Author.Id)
@@ -401,12 +453,53 @@ namespace RexBot
                         File.Delete(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, attachment.Filename));
                 }
 
-                return CommentAddResult.Ok;
+                return JiraActionResult.Ok;
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex);
-                return CommentAddResult.Error;
+                return JiraActionResult.Error;
+            }
+        }
+
+        public async Task<JiraActionResult> CancelTicket(string issueKey, SocketMessage message)
+        {
+            try
+            {
+                Issue issue = null;
+                try
+                {
+                    issue = await jira.Issues.GetIssueAsync(issueKey);
+                }
+                catch
+                {
+
+                }
+
+                if (issue == null)
+                    return JiraActionResult.NotFound;
+
+                if (!Utilities.HasAccess(CommandAccess.Developer, message.Author))
+                {
+                    var m = GetMetadata(issue);
+                    if (m.ReporterId != message.Author.Id)
+                        return JiraActionResult.NotAuthorized;
+                }
+
+                if(!string.IsNullOrEmpty(issue.Assignee) || issue.Status.Name != "To Do")
+                    return JiraActionResult.NotAuthorized;
+
+                issue.Resolution = "Won't Do";
+
+                await issue.WorkflowTransitionAsync("Set as Resolved");
+                await issue.SaveChangesAsync();
+
+                return JiraActionResult.Ok;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                return JiraActionResult.Error;
             }
         }
 

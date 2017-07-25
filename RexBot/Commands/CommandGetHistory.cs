@@ -17,6 +17,8 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Rexxar;
         public string Command => "!gethistory";
         public string HelpText => "";
+        public Embed HelpEmbed { get; }
+
         public async Task<string> Handle(SocketMessage message)
         {
             if (message.Content.Contains("status"))
