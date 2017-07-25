@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Discord;
 using Discord.Addons.EmojiTools;
+using Discord.Rest;
 using Discord.WebSocket;
 
 namespace RexBot.Commands
@@ -15,6 +16,7 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Rexxar;
         public string Command => "!test";
         public string HelpText => "";
+        public Embed HelpEmbed { get; }
 
         public async Task<string> Handle(SocketMessage message)
         {

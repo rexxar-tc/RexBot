@@ -1,4 +1,5 @@
 ﻿using System.Threading.Tasks;
+using Discord;
 using Discord.WebSocket;
 
 namespace RexBot.Commands
@@ -16,6 +17,7 @@ namespace RexBot.Commands
         CommandAccess Access { get; }
         string Command { get; }
         string HelpText { get; }
+        Embed HelpEmbed { get; }
         Task<string> Handle(SocketMessage message);
     }
 }

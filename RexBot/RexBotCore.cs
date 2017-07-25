@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -41,10 +42,9 @@ namespace RexBot
                                                              "Space Engineers",
                                                              "Medieval Engineers",
                                                              "Subnautica",
-                                                             "Minecraft",
                                                              //"Minecraft in Space",
                                                              //"DAT ENGINEERING GAME",
-                                                             //"With Marek <3",
+                                                             "With Marek <3",
                                                              //"With your heart",
                                                              "Gone Home",
                                                              "Miner Wars",
@@ -54,6 +54,10 @@ namespace RexBot
                                                              "Tomb Raider",
                                                              "Goat Simulator",
                                                              "Space Engineers 2",
+                                                             "Oxygen Not Included",
+                                                             "Event[0]",
+                                                             "Space Colony",
+                                                             "The Talos Principle",
                                                          };
 
         private static List<ulong> _bannedUsers = new List<ulong>();
@@ -89,26 +93,57 @@ namespace RexBot
 
         public async Task Run()
         {
-            Console.WriteLine("Initializing...");
-            Console.CancelKeyPress += Console_CancelKeyPress;
-            List<Token> tokens = LoadTokens();
-            ScanAssemblyForCommands();
-            LoadCommands();
-            _statusTimer.Elapsed += async (sender, args) => await SetRandomStatus();
-            _statusTimer.Start();
-            await Login(tokens);
-            CTGSheet = new Sheets(tokens.First(t => t.Name == "CTGSheet").Value, true);
-            PublicSheet = new Sheets(tokens.First(t => t.Name == "PublicSheet").Value);
             try
             {
-                DBManager = new DBManager("KeenLog.db");
+                TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
+                AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+                Console.WriteLine("Initializing...");
+                //Trace.Listeners.Clear();
+                //Trace.Listeners.Add(new TextWriterTraceListener(Console.Out));
+                Console.CancelKeyPress += Console_CancelKeyPress;
+                List<Token> tokens = LoadTokens();
+                ScanAssemblyForCommands();
+                LoadCommands();
+                _statusTimer.Elapsed += async (sender, args) => await SetRandomStatus();
+                await Login(tokens);
+                _statusTimer.Start();
+                string ctgKey = tokens.First(t => t.Name == "CTGSheet").Value;
+                string publicKey = tokens.First(t => t.Name == "PublicSheet").Value;
+                CTGSheet = new Sheets(ctgKey);
+                PublicSheet = new Sheets(publicKey);
+                CommandBugReport.PublicList = publicKey;
+                CommandBugReport.CTGList = ctgKey;
+                try
+                {
+                    DBManager = new DBManager("KeenLog.db");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex);
+                }
+                LoadBanned();
+                Console.WriteLine("Loading missed history");
+                await GetMissingHistory();
+                Console.WriteLine("Ready");
+                await Task.Delay(-1);
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex);
+                Console.ReadLine();
             }
-            LoadBanned();
-            await Task.Delay(-1);
+        }
+
+        private void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+        {
+            Console.WriteLine("Unhandled exception");
+            Console.WriteLine(e.ExceptionObject);
+        }
+
+        private void TaskScheduler_UnobservedTaskException(object sender, UnobservedTaskExceptionEventArgs e)
+        {
+           Console.WriteLine("Unobserved exception");
+            Console.WriteLine(e.Exception);
         }
 
         private void Console_CancelKeyPress(object sender, ConsoleCancelEventArgs e)
@@ -129,8 +164,8 @@ namespace RexBot
 
                 if (RexbotClient == null)
                     RexbotClient = new DiscordSocketClient(new DiscordSocketConfig() {MessageCacheSize = 1000});
-                await RexbotClient.LoginAsync(TokenType.Bot, tokens.First(t => t.Name == "rexbot").Value);
-                await RexbotClient.StartAsync();
+                 await RexbotClient.LoginAsync(TokenType.Bot, tokens.First(t => t.Name == "rexbot").Value);
+                 await RexbotClient.StartAsync();
 
                 AutoResetEvent e = new AutoResetEvent(false);
                 RexbotClient.Ready += delegate
@@ -264,14 +299,50 @@ namespace RexBot
 
         private void ScanAssemblyForCommands()
         {
-            Console.WriteLine("Loading chat commands...");
-            IEnumerable<TypeInfo> types = Assembly.GetCallingAssembly().DefinedTypes;
-            foreach (TypeInfo type in types)
-                if (type.ImplementedInterfaces.Contains(typeof(IChatCommand)))
+            try
+            {
+                Console.WriteLine("Loading chat commands...");
+                var assembly = Assembly.GetEntryAssembly();
+                Console.WriteLine($"Loading {assembly.FullName}");
+                var types = GetTypesSafely(assembly);
+                foreach (TypeInfo type in types)
                 {
-                    Console.WriteLine("Found: " + type.FullName);
-                    ChatCommands.Add((IChatCommand)Activator.CreateInstance(type));
+                    try
+                    {
+                        if (type.ImplementedInterfaces.Contains(typeof(IChatCommand)))
+                        {
+                            Console.WriteLine("Found: " + type.FullName);
+                            ChatCommands.Add((IChatCommand)Activator.CreateInstance(type));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine(ex);
+                        var l = ex as ReflectionTypeLoadException;
+                        if (l != null)
+                            Console.WriteLine(string.Join<Exception>("\r\n", l.LoaderExceptions));
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                var l = ex as ReflectionTypeLoadException;
+                if(l!=null)
+                    Console.WriteLine(string.Join<Exception>("\r\n",l.LoaderExceptions));
+            }
+        }
+
+        private static IEnumerable<Type> GetTypesSafely(Assembly assembly)
+        {
+            try
+            {
+                return assembly.GetTypes();
+            }
+            catch (ReflectionTypeLoadException ex)
+            {
+                return ex.Types.Where(x => x != null);
+            }
         }
 
         private async Task RexbotMessageReceived(SocketMessage message)
@@ -287,12 +358,7 @@ namespace RexBot
                 //await channel.SendMessageAsync($"{message.Author.Mention} You've been banned from using RexBot.");
                 return;
             }
-
-            if (message.Author.Id == 142298196125679617 && Regex.IsMatch(message.Content, "chaff", RegexOptions.IgnoreCase))
-            {
-                await message.Channel.SendMessageAsync($"{message.Author.Mention} ***REEEEEE***");
-            }
-
+            
             if (message.Author.IsBot)
                 return;
 
@@ -444,9 +510,26 @@ namespace RexBot
             return $":{EmojiMap.Map.RandomElement().Key}:";
         }
 
+
+        Queue<string> Last5Status = new Queue<string>(5);
         public async Task<string> SetRandomStatus()
         {
-            string status = _statuses.RandomElement();
+            string status;
+            while (true)
+            {
+                status = _statuses.RandomElement();
+                if (Last5Status.Contains(status))
+                {
+                    Console.WriteLine($"Got duplicate status: {status}");
+                    continue;
+                }
+                break;
+            }
+
+            if (Last5Status.Count >= 5)
+                Last5Status.Dequeue();
+            Last5Status.Enqueue(status);
+
             Console.WriteLine($"Setting status to random entry: {status}");
             await RexbotClient.SetGameAsync(status);
             return status;
@@ -454,7 +537,6 @@ namespace RexBot
 
         public async Task GetMissingHistory()
         {
-            bool cancel;
             long count = 0;
             bool updating = true;
             long minDate = long.MaxValue;
@@ -462,14 +544,11 @@ namespace RexBot
             List<IMessage> _messages = new List<IMessage>();
             ISocketMessageChannel _currentChannel = null;
 
-            Timer timer = new Timer(60 * 1000);
-
-            SocketGuild server = RexBotCore.Instance.RexbotClient.GetGuild(125011928711036928);
-
-            if (server == null)
-                throw new Exception("fuck you and your cow");
+            SocketGuild server = Instance.KeenGuild;
             
             var channels = server.TextChannels;
+
+            var compareTime = TimeSpan.FromHours(1);
 
             foreach (var c in channels)
             {
@@ -487,18 +566,9 @@ namespace RexBot
                         Console.WriteLine("No permission here :(");
                         continue;
                     }
-
-                    _currentChannel = channel;
-                    var oldest = RexBotCore.Instance.DBManager.GetOldestMessageID(c.Id);
-                    IMessage oldestMsg = null;
-                    if (oldest > 0)
-                        oldestMsg = await c.GetMessageAsync(oldest);
-                    IEnumerable<IMessage> tmp;
-                    if (oldestMsg != null)
-                        tmp = await channel.GetMessagesAsync(oldestMsg.Id, Direction.Before).Flatten();
-                    else
-                        tmp = await channel.GetMessagesAsync().Flatten();
-                    minDateLocal = long.MaxValue;
+                    
+                    var tmp = (await channel.GetMessagesAsync().Flatten()).ToList();
+                   
                     while (true)
                     {
                         if (!tmp.Any())
@@ -509,11 +579,11 @@ namespace RexBot
                             lock (_messages)
                                 _messages.Add(msg);
                             count++;
-                            if (DateTime.UtcNow - msg.Timestamp.UtcDateTime > TimeSpan.FromDays(7))
+                            if (DateTime.UtcNow - msg.Timestamp.UtcDateTime > compareTime)
                                 break;
                         }
 
-                        tmp = await channel.GetMessagesAsync(tmp.First(m => m.Timestamp.UtcTicks == tmp.Min(n => n.Timestamp.UtcTicks)).Id, Direction.Before).Flatten();
+                        tmp = (await channel.GetMessagesAsync(tmp.First(m => m.Timestamp.UtcTicks == tmp.Min(n => n.Timestamp.UtcTicks)).Id, Direction.Before).Flatten()).ToList();
                         if (!tmp.Any())
                             break;
                         //Thread.Sleep(500);

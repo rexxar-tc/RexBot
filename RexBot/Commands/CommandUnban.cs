@@ -1,5 +1,6 @@
 ﻿using System.Linq;
 using System.Threading.Tasks;
+using Discord;
 using Discord.WebSocket;
 
 namespace RexBot.Commands
@@ -9,6 +10,7 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Developer;
         public string Command => "!unban";
         public string HelpText => "Allows banned users to access RexBot again.";
+        public Embed HelpEmbed { get; }
 
         public async Task<string> Handle(SocketMessage message)
         {

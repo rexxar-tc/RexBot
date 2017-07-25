@@ -184,10 +184,13 @@ namespace RexBot
 
         public static void AddOrUpdate<T>(this Dictionary<T, int> dic, T key, int value)
         {
-            if (dic.ContainsKey(key))
-                dic[key] += value;
-            else
-                dic[key] = value;
+            int cv;
+            dic.TryGetValue(key, out cv);
+            dic[key] = cv + value;
+            //if (dic.ContainsKey(key))
+            //    dic[key] += value;
+            //else
+            //    dic[key] = value;
         }
 
         public static bool CTG(this SocketMessage msg)
@@ -207,9 +210,12 @@ namespace RexBot
 
         public static bool CTG(this SocketUser user)
         {
-            var c = RexBotCore.Instance.RexbotClient.GetChannel(166886199200448512);
-
-            return c.GetUser(user.Id) != null;
+            return Utilities.CTGChannels.Any(i =>
+                                            {
+                                                var c = RexBotCore.Instance.RexbotClient.GetChannel(i);
+                                                return c.GetUser(user.Id) != null;
+                                            });
+        
         }
 
         public static bool IsRexxar(this SocketUser user)

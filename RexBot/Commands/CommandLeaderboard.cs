@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Discord;
 using Discord.WebSocket;
@@ -10,72 +12,58 @@ namespace RexBot.Commands
 {
     class CommandLeaderboard : IChatCommand
     {
-        public CommandAccess Access => CommandAccess.Developer;
+        public CommandAccess Access => CommandAccess.Public;
         public string Command => "!leaderboard";
         public string HelpText => "";
+        public Embed HelpEmbed { get; }
 
         public async Task<string> Handle(SocketMessage message)
         {
-            Task.Run(() => RunInternal(message));
-            return "Processing. Please wait.";
-        }
-
-        private void RunInternal(SocketMessage message)
-        {
             try
             {
-                SocketGuild server;
-                var id = Utilities.StripCommand(this, message.Content);
-                if (id == null)
-                    server = (message.Channel as SocketGuildChannel)?.Guild;
-                else
-                    server = RexBotCore.Instance.RexbotClient.GetGuild(ulong.Parse(id));
+                SocketGuild server = RexBotCore.Instance.KeenGuild;
+                var start = DateTime.Now;
+                var messageCounts = new ConcurrentDictionary<ulong, int>();
+                
+                var em = new EmbedBuilder(); long count = 0;
 
-                if (server == null)
-                    throw new Exception("fuck you and your cow");
+                var channels = new List<ISocketMessageChannel>();
 
-                var messageCounts = new Dictionary<ulong, int>();
-
-                var messages = new HashSet<IMessage>();
-
-                long count = 0;
-
-                foreach (ISocketMessageChannel channel in server.TextChannels)
+                if (message.MentionedChannels != null && message.MentionedChannels.Count > 0)
                 {
-                    try
+                    var c = message.MentionedChannels.First() as ISocketMessageChannel;
+                    if (c == null)
                     {
-                        var reader = RexBotCore.Instance.DBManager.ExecuteQuery($"SELECT authorid FROM K{channel.Id}");
-                        while (reader.Read())
-                        {
-                            var uid = ulong.Parse(((long)reader.GetValue(0)).ToString());
-                            messageCounts.AddOrUpdate(uid, 1);
-                            count++;
-                        }
-                        //var tmp = channel.GetMessagesAsync().Flatten().Result;
-                        //bool inDate = true;
-                        //while (inDate)
-                        //{
-                        //    Console.WriteLine($"Got {tmp.Count()} messages.");
-                        //    foreach (var msg in tmp)
-                        //    {
-                        //        messageCounts.AddOrUpdate(msg.Author.Id, 1);
-                        //        if (msg.Timestamp.Date.Day == DateTime.Now.Day+1)
-                        //        {
-                        //            inDate = false;
-                        //            break;
-                        //        }
-                        //    }
-
-                        //    tmp = channel.GetMessagesAsync(tmp.Last(), Direction.Before).Flatten().Result;
-                        //    if (tmp.Count() == 0)
-                        //        break;
-                        //}
+                        return "Error";
                     }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine(ex);
-                    }
+                    channels.Add(c);
+                    em.Title = $"#{c.Name}";
                 }
+                else
+                    channels.AddRange(server.TextChannels);
+                
+                Parallel.ForEach(channels, channel =>
+                                           {
+                                               try
+                                               {
+                                                   var lCount = new Dictionary<ulong, int>();
+                                                   var reader = RexBotCore.Instance.DBManager.ExecuteQuery($"SELECT authorid ,Count(*) FROM K{channel.Id} GROUP BY authorid");
+                                                   while (reader.Read())
+                                                   {
+                                                       var uid = (ulong)reader.GetInt64(0);
+                                                       lCount.AddOrUpdate(uid, reader.GetInt32(1)); 
+                                                   }
+                                                   foreach (var lc in lCount)
+                                                   {
+                                                       messageCounts.AddOrUpdate(lc.Key, u => lc.Value, (u, i) => i + lc.Value);
+                                                       Interlocked.Add(ref count, lc.Value);
+                                                   }
+                                               }
+                                               catch (Exception ex)
+                                               {
+                                                   Console.WriteLine(ex);
+                                               }
+                                           });
 
                 var sort = new List<MessageCount>();
 
@@ -85,11 +73,7 @@ namespace RexBot.Commands
                 }
 
                 sort.Sort((b,a)=>a.count.CompareTo(b.count));
-
-                var sb = new StringBuilder();
-
-                sb.AppendLine($"Leaderboard for {server.Name} over all history:");
-
+                
                 List<SocketGuildUser> users = new List<SocketGuildUser>(25);
 
                 foreach (var c in sort)
@@ -104,26 +88,37 @@ namespace RexBot.Commands
                         break;
                 }
 
+                em.Author = new EmbedAuthorBuilder()
+                            {
+                                IconUrl = RexBotCore.Instance.KeenGuild.IconUrl,
+                                Name = "Leaderboard for Keen Software House"
+                            };
+
                 for (int index = 0; index < Math.Min(users.Count, 25); index++)
                 {
                     var user = users[index];
                     var c = sort.Find(mc => mc.user == user.Id);
                     
-                    sb.Append($"#{index+1} ");
-                    sb.Append(user.NickOrUserName()).Append(": ").Append(c.count);
-                    sb.AppendLine();
+                    em.Fields.Add(new EmbedFieldBuilder()
+                                  {
+                                      IsInline=true,
+                                      Name = $"#{index+1}: {user.NickOrUserName()}",
+                                      Value = $"{c.count:n0} Messages"
+                                  });
                 }
-
-                sb.AppendLine($"Processed {count} messages.");
-
-                var str = sb.ToString();
-                Console.WriteLine(str);
-                message.Channel.SendMessageAsync(str.Length > 2000 ? str.Substring(0, 2000) : str);
+                
+                em.Footer = new EmbedFooterBuilder()
+                            {
+                                Text = $"Processed {count:n0} messages in {(DateTime.Now - start).TotalMilliseconds:n0}ms."
+                            };
+                
+               await message.Channel.SendMessageAsync("", embed:em);
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex);
             }
+            return null;
         }
 
         struct MessageCount

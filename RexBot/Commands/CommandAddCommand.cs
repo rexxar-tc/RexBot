@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
+using Discord;
 using Discord.WebSocket;
 
 namespace RexBot.Commands
@@ -12,6 +13,8 @@ namespace RexBot.Commands
         public string Command => "!addcommand";
         public string HelpText => "Adds info command. `!addcommand [!commandKey] \"[response]\" (imageResponse)`\r\n" +
                                   "ImageResponse embeds the given link as an image. This is optional and defaults to false.";
+
+        public Embed HelpEmbed { get; }
 
         public async Task<string> Handle(SocketMessage message)
         {
