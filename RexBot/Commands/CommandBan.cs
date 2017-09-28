@@ -8,7 +8,7 @@ namespace RexBot.Commands
 {
     internal class CommandBan : IChatCommand
     { 
-        public CommandAccess Access => CommandAccess.Developer;
+        public CommandAccess Access => CommandAccess.Moderator;
         public string Command => "!ban";
         public string HelpText => "Bans users from all RexBot functions.";
         public Embed HelpEmbed { get; }
@@ -17,8 +17,6 @@ namespace RexBot.Commands
         {
             if (!message.MentionedUsers.Any())
             {
-                var guild = (message.Author as SocketGuildUser)?.Guild;
-
                 if (!RexBotCore.Instance.BannedUsers.Any())
                     return "No users currently banned.";
 
@@ -27,7 +25,7 @@ namespace RexBot.Commands
                 foreach (var id in RexBotCore.Instance.BannedUsers)
                 {
                     var user =RexBotCore.Instance.RexbotClient.GetUser(id);
-                    sb.AppendLine(guild?.GetUser(id).Nickname ?? user.Username);
+                    sb.AppendLine(user.NickOrUserName());
                 }
                 return sb.ToString();
             }

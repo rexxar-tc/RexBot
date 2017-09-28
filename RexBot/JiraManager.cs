@@ -8,6 +8,8 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
+using System.Xml.XPath;
 using Atlassian.Jira;
 using Discord;
 using Discord.WebSocket;
@@ -106,6 +108,10 @@ namespace RexBot
         public List<ProjectVersion> CachedVersions;
         public readonly Jira jira;
         private Timer UpdateTimer;
+        public string LastSpaceVersion;
+        public string SpaceNews;
+        public string LastMedievalVersion;
+        public string MedievalNews;
 
         public JiraManager(string URL, string username, string password)
         {
@@ -116,6 +122,7 @@ namespace RexBot
                      {
                          try
                          {
+                             GetNews();
                              var ps =jira.Projects.GetProjectsAsync().Result;
                              Console.WriteLine(string.Join(", ", ps.Select(pq => pq.Key)));
                              var p = jira.Projects.GetProjectAsync("SE").Result;
@@ -123,7 +130,7 @@ namespace RexBot
                              p = jira.Projects.GetProjectAsync("ME").Result;
                              CachedVersions.AddRange(p.GetVersionsAsync().Result);
                              Console.WriteLine($"Got {CachedVersions.Count} Versions");
-                             Console.WriteLine(string.Join(", ", CachedVersions.Select(v => v.Name)));
+                             //Console.WriteLine(string.Join(", ", CachedVersions.Select(v => v.Name)));
                              CachedIssues = GetIssues();
                          }
                          catch (Exception ex)
@@ -142,6 +149,7 @@ namespace RexBot
         {
             try
             {
+                GetNews();
                 var p = await jira.Projects.GetProjectAsync("SE");
                 CachedVersions = (await p.GetVersionsAsync()).ToList();
                 p = jira.Projects.GetProjectAsync("ME").Result;
@@ -153,9 +161,9 @@ namespace RexBot
                 if (oldIssues.Count == 0)
                     oldIssues = CachedIssues;
 
-                IList<IList<object>>[] data = new IList<IList<object>>[4];
+                IList<IList<object>>[] data = new IList<IList<object>>[6];
 
-                for (int i = 0; i < 4; i++)
+                for (int i = 0; i < data.Length; i++)
                     data[i] = new List<IList<object>>();
 
                 foreach (var newIssue in CachedIssues)
@@ -169,10 +177,6 @@ namespace RexBot
                         var sb = new StringBuilder();
                         foreach (var comment in comments)
                         {
-                            if (comment.Author == "rex.bot")
-                                sb.Append($"{oldIssue.Metadata.ReporterName}: ");
-                            else
-                                sb.Append($"{comment.Author}: ");
                             sb.AppendLine(comment.Body);
                             sb.AppendLine();
                         }
@@ -198,19 +202,33 @@ namespace RexBot
                         {
                             if (oldIssue.Issue.Status.Name == "Resolved" || oldIssue.Issue.Status.Name == "Cancel" || oldIssue.Issue.Status.Name == "Implemented")
                                 //await RexBotCore.Instance.CTGSheet.AppendRow("Old Reports", row);
-                                data[3].Add(row);
+                                data[5].Add(row);
                             else
+                            {
                                 //await RexBotCore.Instance.CTGSheet.AppendRow("CTG Reports", row);
-                                data[2].Add(row);
+                                if (oldIssue.Key.StartsWith("SE"))
+                                    data[3].Add(row);
+                                else if (oldIssue.Key.StartsWith("ME"))
+                                    data[4].Add(row);
+                                else
+                                    throw new ArgumentOutOfRangeException();
+                            }
                         }
                         else
                         {
                             if (oldIssue.Issue.Status.Name == "Resolved" || oldIssue.Issue.Status.Name == "Cancel" || oldIssue.Issue.Status.Name == "Implemented")
                                 //await RexBotCore.Instance.PublicSheet.AppendRow("Old Reports", row);
-                                data[1].Add(row);
+                                data[2].Add(row);
                             else
+                            {
                                 //await RexBotCore.Instance.PublicSheet.AppendRow("Public List", row);
-                                data[0].Add(row);
+                                if (oldIssue.Key.StartsWith("SE"))
+                                    data[0].Add(row);
+                                else if (oldIssue.Key.StartsWith("ME"))
+                                    data[1].Add(row);
+                                else
+                                    throw new ArgumentOutOfRangeException();
+                            }
                         }
                         if (!oldIssue.Metadata.IsCTG && Utilities.CTGChannels.Contains(oldIssue.Metadata.ReporterChannel))
                         {
@@ -229,32 +247,64 @@ namespace RexBot
                     }
                 }
 
-
-                //TODO: Put ME reports in their own sheet or page
+                await RexBotCore.Instance.PublicSheet.EmptyPage("Public List");
                 if (data[0].Any())
-                {
-                    await RexBotCore.Instance.PublicSheet.EmptyPage("Public List");
                     await RexBotCore.Instance.PublicSheet.AppendRows("Public List", data[0]);
-                }
+                await RexBotCore.Instance.PublicSheet.EmptyPage("ME Reports");
                 if (data[1].Any())
-                {
-                    await RexBotCore.Instance.PublicSheet.EmptyPage("Old Reports");
-                    await RexBotCore.Instance.PublicSheet.AppendRows("Old Reports", data[1]);
-                }
+                    await RexBotCore.Instance.PublicSheet.AppendRows("ME Reports", data[1]);
+                await RexBotCore.Instance.PublicSheet.EmptyPage("Old Reports");
                 if (data[2].Any())
-                {
-                    await RexBotCore.Instance.CTGSheet.EmptyPage("CTG Reports");
-                    await RexBotCore.Instance.CTGSheet.AppendRows("CTG Reports", data[2]);
-                }
+                    await RexBotCore.Instance.PublicSheet.AppendRows("Old Reports", data[2]);
+                await RexBotCore.Instance.CTGSheet.EmptyPage("CTG Reports");
                 if (data[3].Any())
-                {
-                    await RexBotCore.Instance.CTGSheet.EmptyPage("Old Reports");
-                    await RexBotCore.Instance.CTGSheet.AppendRows("Old Reports", data[3]);
-                }
+                    await RexBotCore.Instance.CTGSheet.AppendRows("CTG Reports", data[3]);
+                await RexBotCore.Instance.CTGSheet.EmptyPage("ME Reports");
+                if (data[4].Any())
+                    await RexBotCore.Instance.CTGSheet.AppendRows("ME Reports", data[4]);
+                await RexBotCore.Instance.CTGSheet.EmptyPage("Old Reports");
+                if (data[5].Any())
+                    await RexBotCore.Instance.CTGSheet.AppendRows("Old Reports", data[5]);
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex);
+            }
+        }
+
+        public void GetNews()
+        {
+            using (var client = new WebClient())
+            {
+                var news = client.DownloadString("http://mirror.keenswh.com/news/SpaceEngineersChangelog.xml");
+                var document = XDocument.Parse(news);
+                var version = (string)((IEnumerable<object>)document.XPathEvaluate("/News/Entry/@version"))
+                    .Cast<XAttribute>()
+                    .FirstOrDefault();
+                SpaceNews = (string)((IEnumerable<object>)document.XPathEvaluate("/News/Entry"))
+                    .Cast<XElement>()
+                    .FirstOrDefault();
+                int i;
+                if (!int.TryParse(version, out i))
+                    Console.WriteLine($"Failed to parse Space version! Got {version}");
+                else
+                    LastSpaceVersion = version[0] + "." + version.Substring(1, 3) + "." + version.Substring(4);
+
+                news = client.DownloadString("http://mirror.keenswh.com/news/MedievalEngineersChangelog.xml");
+                document = XDocument.Parse(news);
+                version = (string)((IEnumerable<object>)document.XPathEvaluate("/News/Entry/@version"))
+                    .Cast<XAttribute>()
+                    .FirstOrDefault();
+                MedievalNews = (string)((IEnumerable<object>)document.XPathEvaluate("/News/Entry"))
+                    .Cast<XElement>()
+                    .FirstOrDefault();
+
+                if (!int.TryParse(version, out i))
+                    Console.WriteLine($"Failed to parse Medieval version! Got {version}");
+                else
+                    LastMedievalVersion = "0." + version.Substring(0, 2).Trim('0') + "." + version.Substring(3).Trim('0');
+
+                //Console.WriteLine($"Finished updating versions. SE: {LastSpaceVersion} ME: {LastMedievalVersion}");
             }
         }
 
@@ -273,7 +323,12 @@ namespace RexBot
             if (!newIssue.Metadata.IsCTG)
                 channel = (ISocketMessageChannel)RexBotCore.Instance.RexbotClient.GetChannel(136097351134740480);
             else
-                channel = (ISocketMessageChannel)RexBotCore.Instance.RexbotClient.GetChannel(newIssue.Metadata.ReporterChannel);
+            {
+                if (newIssue.Issue.Project == "SE")
+                    channel = (ISocketMessageChannel)RexBotCore.Instance.RexbotClient.GetChannel(166886199200448512);
+                else
+                    channel = (ISocketMessageChannel)RexBotCore.Instance.RexbotClient.GetChannel(222685377201307648);
+            }
 
             if (newComments.Count() > oldComments.Count())
             {
@@ -289,8 +344,13 @@ namespace RexBot
             
             if (newIssue.Issue.Status.ToString() != oldIssue.Issue.Status.ToString())
             {
-                await channel.SendMessageAsync($"<@{newIssue.Metadata.ReporterId}> The status of your report `{newIssue.Issue.Key}: {newIssue.Issue.Summary}` has been updated to `{newIssue.Issue.Status}`.");
-               
+                string message = $"<@{newIssue.Metadata.ReporterId}> The status of your report `{newIssue.Issue.Key}: {newIssue.Issue.Summary}` has been updated to `{newIssue.Issue.Status}";
+                if (newIssue.Issue.Status.Name.Equals("Resolved"))
+                    message += $" : {newIssue.Issue.Resolution}`";
+                else
+                    message += '`';
+                await channel.SendMessageAsync(message);
+
                 //    if (newIssue.Metadata.IsCTG)
                 //        await RexBotCore.Instance.CTGSheet.OverwriteCell($"CTG Reports!E:{sheetIndex}", newIssue.Issue.Status.ToString());
                 //    else
@@ -306,15 +366,7 @@ namespace RexBot
 
             if (string.IsNullOrEmpty(oldIssue.Issue.Assignee) && !string.IsNullOrEmpty(newIssue.Issue.Assignee))
             {
-                var dm = await RexBotCore.Instance.RexbotClient.GetDMChannelAsync(RexBotCore.REXXAR_ID);
-                if (dm != null)
-                    await dm.SendMessageAsync($"Jira issue {newIssue.Key} assigned to {newIssue.Issue.Assignee}");
-                else
-                {
-                    var c = (ISocketMessageChannel)RexBotCore.Instance.RexbotClient.GetChannel(263612647579189248);
-                    await c.SendMessageAsync("Null DM channel :(");
-                    await c.SendMessageAsync($"Jira issue {newIssue.Key} assigned to {newIssue.Issue.Assignee}");
-                }
+                Utilities.Log($"Jira issue {newIssue.Key} assigned to {newIssue.Issue.Assignee}");
             }
         }
 
@@ -340,7 +392,7 @@ namespace RexBot
                 issue.Type = "Bug";
                 issue.Summary = $"Player Report: {summary}";
                 issue.Description = $"{description}\r\n\r\n" +
-                                    $"Reported by: {meta.ReporterName}\r\n" +
+                                    $"Reported by: {meta.ReporterName} : <@{meta.ReporterId}>\r\n" +
                                     $"CTG: {meta.IsCTG}\r\n\r\n" +
                                     $"{METADATA_TAG};{meta.Serialize()};";
 
@@ -358,6 +410,8 @@ namespace RexBot
 
                 if (!string.IsNullOrEmpty(version))
                     issue.AffectsVersions.Add(version);
+
+                issue.Labels.Add("Rexbot");
 
                 await issue.SaveChangesAsync();
 
@@ -396,7 +450,7 @@ namespace RexBot
                     }
                 }
 
-                CachedIssues.Add(new CachedIssue(issue, meta));
+                //CachedIssues.Add(new CachedIssue(issue, meta));
                 return issue.Key.Value;
             }
             catch (Exception ex)

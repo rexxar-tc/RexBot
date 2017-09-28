@@ -43,7 +43,7 @@ namespace RexBot.Commands
                               });
                 em.Color = new Color(102, 153, 255);
                
-                await message.Channel.SendMessageAsync($"{message.Author.Mention} Use `!help [command]` for more info", embed: em);
+                await message.Channel.SendMessageAsync($"{message.Author.Mention} Use `!help [command]` for more info", embed: em.Build());
                 return null;
             }
             else
@@ -64,7 +64,7 @@ namespace RexBot.Commands
                                               Name = command.Command,
                                               Value = command.HelpText
                                           });
-                            await message.Channel.SendMessageAsync(message.Author.Mention, embed: em);
+                            await message.Channel.SendMessageAsync(message.Author.Mention, embed: em.Build());
                         }
                         else
                         {

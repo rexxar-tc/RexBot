@@ -287,7 +287,7 @@ namespace RexBot
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
+                //Console.WriteLine(ex);
                 return false;
             }
         }

@@ -20,8 +20,15 @@ namespace RexBot.Commands
 
         public async Task<string> Handle(SocketMessage message)
         {
-            await RexBotCore.Instance.Jira.Update();
-            return "Okay.";
+            StringBuilder sb = new StringBuilder();
+            foreach (var c in RexBotCore.Instance.KeenGuild.TextChannels)
+            {
+                sb.AppendLine($"{c.Id} : {c.Name}");
+            }
+
+            return "Tested.";
+            //await RexBotCore.Instance.Jira.Update();
+            //return "Okay.";
         }
     }
 }

@@ -27,7 +27,7 @@ namespace RexBot.Commands
                     {
                         EmbedBuilder em = new EmbedBuilder();
                         em.ImageUrl = command.Response;
-                        await channel.SendMessageAsync(message.Author.Mention, embed: em);
+                        await channel.SendMessageAsync(message.Author.Mention, embed: em.Build());
                     }
                 }
             return string.Empty;

@@ -8,7 +8,7 @@ using Discord.WebSocket;
 
 namespace RexBot.Commands
 {
-    internal class CommandBugReport : IChatCommand
+    class CommandBugReport : IChatCommand
     {
         public CommandAccess Access => CommandAccess.Public;
         public string Command => "!bugreport";
@@ -22,8 +22,8 @@ namespace RexBot.Commands
                                   "!bugreport cancel [report number] [message] - Cancels your ticket, and leaves a comment explaining why. Only available to the original reporter." +
                                   "```";
 
-        public Embed HelpEmbed => _lazy.Value;
-        private Lazy<Embed> _lazy = new Lazy<Embed>(CreateLazy);
+        public Embed HelpEmbed => _help.Value;
+        private Lazy<Embed> _help = new Lazy<Embed>(CreateLazy);
 
         public static string PublicList;
         public static string CTGList;
@@ -65,9 +65,9 @@ namespace RexBot.Commands
                             }
                         };
             em.Color = new Color(102,153,255);
-            return em;
+            return em.Build();
         }
-
+        
         public async Task<string> Handle(SocketMessage message)
         {
             ulong? channelid = (message.Channel as IGuildChannel)?.GuildId;
@@ -78,7 +78,7 @@ namespace RexBot.Commands
 
             if (arg == null)
             {
-                await message.Channel.SendMessageAsync(message.Author.Mention + " Help for !bugreport:", embed: _lazy.Value);
+                await message.Channel.SendMessageAsync(message.Author.Mention + " Help for !bugreport:", embed: _help.Value);
                 return null;
             }
 
@@ -101,7 +101,7 @@ namespace RexBot.Commands
                                     x.Name = "CTG List";
                                     x.Value = $"https://docs.google.com/spreadsheets/d/{CTGList}/edit?usp=sharing";
                                 });
-                    await message.Channel.SendMessageAsync(message.Author.Mention + " Lists update every 10 minutes.", embed: em);
+                    await message.Channel.SendMessageAsync(message.Author.Mention + " Lists update every 10 minutes.", embed: em.Build());
                 }
                 else
                 {
@@ -112,7 +112,7 @@ namespace RexBot.Commands
                                        x.Value = $"https://docs.google.com/spreadsheets/d/{PublicList}/edit?usp=sharing";
                                    });
 
-                    await message.Channel.SendMessageAsync(message.Author.Mention + " Lists update every 10 minutes.", embed: thing);
+                    await message.Channel.SendMessageAsync(message.Author.Mention + " Lists update every 10 minutes.", embed: thing.Build());
                     return string.Empty;
                 }
                 return null;
@@ -164,7 +164,7 @@ namespace RexBot.Commands
             {
                 try
                 {
-                    var dm = await message.Author.CreateDMChannelAsync();
+                    var dm = await message.Author.GetOrCreateDMChannelAsync();
                     await dm.SendMessageAsync(BugreportBuilder.INTRO);
                     RexBotCore.Instance.BugBuilders[dm.Id]= new BugreportBuilder(message.Author.Id, dm);
                     Console.WriteLine($"Starting BugreportBuilder for {message.Author.NickOrUserName()}");
@@ -182,7 +182,7 @@ namespace RexBot.Commands
 
             if (arg.ToLower() == "help")
             {
-                await message.Channel.SendMessageAsync($"{message.Author.Mention} Did you mean `!help !bugreport?", embed: _lazy.Value);
+                await message.Channel.SendMessageAsync($"{message.Author.Mention} Did you mean `!help !bugreport?", embed: _help.Value);
                 return null;
             }
             

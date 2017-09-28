@@ -7,7 +7,7 @@ namespace RexBot.Commands
 {
     internal class CommandUnban : IChatCommand
     {
-        public CommandAccess Access => CommandAccess.Developer;
+        public CommandAccess Access => CommandAccess.Moderator;
         public string Command => "!unban";
         public string HelpText => "Allows banned users to access RexBot again.";
         public Embed HelpEmbed { get; }

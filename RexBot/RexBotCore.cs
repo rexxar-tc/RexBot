@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Net;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -29,7 +30,7 @@ namespace RexBot
                                               "If you have a question about how to use SESE, ask in the server admin text channel, one of the other users can help.\r\n" +
                                               "Questions about modding/scripting/programming are best asked in the appropriate channel on the KSH discord server.\r\n" +
                                               "Otherwise if you feel you urgently need rexxar's attention, send another message with as much detail of your problem as you can give.";
-
+        
         private const string INTRO_MSG = "bleep bloop bleep, this is rexxar's auto-respond bot.";
         private const string FIXIT_RESPONSE = "No:tm: :sunglasses:";
 
@@ -61,6 +62,7 @@ namespace RexBot
                                                          };
 
         private static List<ulong> _bannedUsers = new List<ulong>();
+        private static Dictionary<string, Dictionary<ulong, bool>> _permissionOverrides;
 
         private Random _random = new Random();
 
@@ -82,10 +84,8 @@ namespace RexBot
         public List<InfoCommand> InfoCommands { get; private set; } = new List<InfoCommand>();
         public List<IChatCommand> ChatCommands { get; } = new List<IChatCommand>();
 
-        public List<ulong> BannedUsers
-        {
-            get { return _bannedUsers; }
-        }
+        public List<ulong> BannedUsers => _bannedUsers;
+        public Dictionary<string, Dictionary<ulong, bool>> PermissionOverrides => _permissionOverrides;
 
         public DBManager DBManager;
 
@@ -122,6 +122,7 @@ namespace RexBot
                     Console.WriteLine(ex);
                 }
                 LoadBanned();
+                LoadOverrides();
                 Console.WriteLine("Loading missed history");
                 await GetMissingHistory();
                 Console.WriteLine("Ready");
@@ -156,11 +157,11 @@ namespace RexBot
             Console.WriteLine("Authenticating...");
             try
             {
-                if (RexxarClient == null)
-                    RexxarClient = new DiscordSocketClient();
-                await RexxarClient.LoginAsync(TokenType.User, tokens.First(t => t.Name == "rexxar").Value);
-                await RexxarClient.StartAsync();
-                RexxarClient.MessageReceived += RexxarMessageReceived;
+                //if (RexxarClient == null)
+                //    RexxarClient = new DiscordSocketClient();
+                //await RexxarClient.LoginAsync(TokenType.User, tokens.First(t => t.Name == "rexxar").Value);
+                //await RexxarClient.StartAsync();
+                //RexxarClient.MessageReceived += RexxarMessageReceived;
 
                 if (RexbotClient == null)
                     RexbotClient = new DiscordSocketClient(new DiscordSocketConfig() {MessageCacheSize = 1000});
@@ -177,7 +178,8 @@ namespace RexBot
                 Console.WriteLine("Waiting for fucking Volt");
                 e.WaitOne();
                 Console.WriteLine("Waiting done.");
-                
+
+                //await RexxarClient.SetStatusAsync(UserStatus.Invisible);
                 await SetRandomStatus();
                 //await RexbotClient.SetGame( "Try !bugreport" );
                 RexbotClient.MessageReceived += RexbotMessageReceived;
@@ -196,7 +198,7 @@ namespace RexBot
             }
             return true;
         }
-
+        
         private async Task RexbotJoinedGuild(SocketGuild arg)
         {
             Console.WriteLine($"Added to guild: '{arg.Name}'");
@@ -297,6 +299,54 @@ namespace RexBot
             }
         }
 
+        public void LoadOverrides()
+        {
+            string filename = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PermissionOverride.xml");
+            if (!File.Exists(filename))
+            {
+                Console.WriteLine("Permission override file not found.");
+                _permissionOverrides = new Dictionary<string, Dictionary<ulong, bool>>();
+                return;
+            }
+
+            Console.WriteLine("Loading permission overrides...");
+            using (var reader = new StreamReader(filename))
+            {
+                int count=0;
+                var x = new XmlSerializer(typeof(List<CommandOverride>));
+                var raw = (List<CommandOverride>)x.Deserialize(reader);
+                _permissionOverrides = new Dictionary<string, Dictionary<ulong, bool>>();
+                foreach (var r in raw)
+                {
+                    if (!_permissionOverrides.ContainsKey(r.Command))
+                        _permissionOverrides.Add(r.Command, new Dictionary<ulong, bool>() {{r.User, r.Permission}});
+                    else
+                        _permissionOverrides[r.Command][r.User] = r.Permission;
+                    count++;
+                }
+                Console.WriteLine($"Found {count}.");
+            }
+        }
+
+        public void SaveOverrides()
+        {
+            using (var writer = new StreamWriter(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PermissionOverride.xml")))
+            {
+                var l = new List<CommandOverride>();
+                foreach (var e in _permissionOverrides)
+                {
+                    foreach (var p in e.Value)
+                    {
+                        l.Add(new CommandOverride(e.Key, p.Key, p.Value));
+                    }
+                }
+
+                var x = new XmlSerializer(typeof(List<CommandOverride>));
+                x.Serialize(writer, l);
+                writer.Close();
+            }
+        }
+
         private void ScanAssemblyForCommands()
         {
             try
@@ -348,10 +398,43 @@ namespace RexBot
         private async Task RexbotMessageReceived(SocketMessage message)
         {
             ISocketMessageChannel channel = message.Channel;
-
+           
             if (message.Author.Id == REXBOT_ID || message.Author.Id == 186606257317085184)
                 return;
-            
+
+            if(message.Author.Id == REXXAR_ID && message.Attachments.FirstOrDefault()?.Filename.Equals("RexBot.exe", StringComparison.CurrentCultureIgnoreCase) == true)
+            {        
+                const string BAT = @"@ECHO OFF
+SLEEP 20
+DEL RexBot.exe
+REN RexBot.new RexBot.exe
+RexBot.exe";
+                using (var client = new WebClient())
+                {
+                    string filename = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "RexBot.new");
+                    client.DownloadFile(message.Attachments.First().Url, filename);
+                }
+
+                await message.Channel.SendMessageAsync("Received update. Restarting...");
+
+                string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "update.bat");
+
+                if (!File.Exists(path))
+                    File.WriteAllText(path, BAT);
+
+                Process.Start(path);
+                Environment.Exit(1);
+            }
+
+            if (message.MentionedUsers.Any(u => u.Id == REXXAR_ID))
+            {
+                //if (Regex.IsMatch(message.Content, @"fix.*it", RegexOptions.IgnoreCase))
+                //{
+                //    Console.WriteLine($"{DateTime.Now}: [{channel.ServerName()}: {channel.Name}] {message.Author.Username}: {message.Content}");
+                //    await channel.SendMessageAsync($"{message.Author.Mention} {FIXIT_RESPONSE}");
+                //}
+            }
+
             if (_bannedUsers.Contains(message.Author.Id))
             {
                 //Console.WriteLine($"Responding to banned user {message.Author.Username}");
@@ -388,7 +471,17 @@ namespace RexBot
                     }
 
                     Console.WriteLine($"{DateTime.Now} [{channel.ServerName()}: {channel.Name}] {message.Author.Username}: {message.Content}");
-                    if (!command.IsPublic && (message.Author.Id != REXXAR_ID))
+
+                    bool? ovr = null;
+                    Dictionary<ulong, bool> d;
+                    if(_permissionOverrides.TryGetValue(command.Command, out d))
+                    {
+                        bool b;
+                        if (d.TryGetValue(message.Author.Id, out b))
+                            ovr = b;
+                    }
+
+                    if (ovr == false || (!command.IsPublic && (message.Author.Id != REXXAR_ID) && ovr != true))
                     {
                         await channel.SendMessageAsync($"{message.Author.Mention} You aren't allowed to use that command!");
                         break;
@@ -404,7 +497,7 @@ namespace RexBot
                         {
                             EmbedBuilder em = new EmbedBuilder();
                             em.ImageUrl = command.Response;
-                            await channel.SendMessageAsync(message.Author.Mention, embed: em);
+                            await channel.SendMessageAsync(message.Author.Mention, embed: em.Build());
                         }
                     }
                 }
@@ -420,8 +513,17 @@ namespace RexBot
                         return;
                     }
 
+                    bool? ovr = null;
+                    Dictionary<ulong, bool> d;
+                    if (_permissionOverrides.TryGetValue(command.Command, out d))
+                    {
+                        bool b;
+                        if (d.TryGetValue(message.Author.Id, out b))
+                            ovr = b;
+                    }
+
                     Console.WriteLine($"{DateTime.Now} [{channel.ServerName()}: {channel.Name}] {message.Author.Username}: {message.Content}");
-                    if (!command.HasAccess(message.Author))
+                    if (ovr == false || ovr != true && !command.HasAccess(message.Author))
                     {
                         Console.WriteLine("Not Authorized");
                         await channel.SendMessageAsync($"{message.Author.Mention} You aren't allowed to use that command!");
@@ -458,14 +560,7 @@ namespace RexBot
             {
                 await channel.SendMessageAsync(message.Author.Mention + " There are no plans to implement water of any kind in Medieval Engineers.");
             }
-            //if (message.MentionedUsers.Any(u => u.Id == REXXAR_ID))
-            //{
-            //    if (Regex.IsMatch(message.Content, @"fix.*it", RegexOptions.IgnoreCase))
-            //    {
-            //        Console.WriteLine($"{DateTime.Now}: [{channel.ServerName()}: {channel.Name}] {message.Author.Username}: {message.Content}");
-            //        await channel.SendMessageAsync($"{message.Author.Mention} {FIXIT_RESPONSE}");
-            //    }
-            //}
+
         }
 
         private async Task RexxarMessageReceived(SocketMessage message)
@@ -480,10 +575,10 @@ namespace RexBot
             if (message.Author.Id == RexxarClient.CurrentUser.Id)
                 return;
 
-            bool asking = Regex.IsMatch(message.Content, @"can.*ask.*question|have.*question", RegexOptions.IgnoreCase);
             if (!(channel is SocketGuildChannel))
             {
-                IEnumerable<IMessage> messages = await channel.GetMessagesAsync().Flatten();
+                bool asking = Regex.IsMatch(message.Content, @"can.*ask.*question|have.*question", RegexOptions.IgnoreCase);
+                IEnumerable<IMessage> messages = await channel.GetMessagesAsync(21).Flatten();
                 int count = messages.Count();
                 if (((count < 2) || asking) && (count < 20))
                 {
@@ -628,6 +723,21 @@ namespace RexBot
                 Author = author;
                 IsPublic = isPublic;
                 ImageResponse = imageResponse;
+            }
+        }
+
+        [Serializable]
+        public struct CommandOverride
+        {
+            public string Command;
+            public ulong User;
+            public bool Permission;
+
+            public CommandOverride(string command, ulong user, bool permission)
+            {
+                Command = command;
+                User = user;
+                Permission = permission;
             }
         }
     }

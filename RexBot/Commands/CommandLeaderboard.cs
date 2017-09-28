@@ -74,11 +74,11 @@ namespace RexBot.Commands
 
                 sort.Sort((b,a)=>a.count.CompareTo(b.count));
                 
-                List<SocketGuildUser> users = new List<SocketGuildUser>(25);
+                List<SocketUser> users = new List<SocketUser>(25);
 
                 foreach (var c in sort)
                 {
-                    var user = server.GetUser(c.user);
+                    var user = RexBotCore.Instance.RexbotClient.GetUser(c.user);
                     if (user == null || user.IsBot)
                         continue;
 
@@ -112,7 +112,7 @@ namespace RexBot.Commands
                                 Text = $"Processed {count:n0} messages in {(DateTime.Now - start).TotalMilliseconds:n0}ms."
                             };
                 
-               await message.Channel.SendMessageAsync("", embed:em);
+               await message.Channel.SendMessageAsync("", embed:em.Build());
             }
             catch (Exception ex)
             {

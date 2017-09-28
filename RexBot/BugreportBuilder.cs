@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection.Metadata;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml;
 using Discord;
 using Discord.Rest;
 using Discord.WebSocket;
@@ -14,6 +16,7 @@ namespace RexBot
 {
     public class BugreportBuilder
     {
+        private static Random _random = new Random();
         public const int REPORT_MIN_LENGTH = 200;
         public const string INTRO = "Hi there, I'm going to help you build a new bug report for Keen Software House.\r\n" +
                                     "You can send `!cancel` at any time to cancel this bug report.\r\n" +
@@ -24,7 +27,9 @@ namespace RexBot
         private const string STEP_VERSION_ME = "Please enter the version of the game which shows the problem. It should look like this: `0.5.9`";
         private const string STEP_VERSION_SE = "Please enter the version of the game which shows the problem. It should look like this: `1.180.401`";
         private const string STEP_SUMMARY = "Next, enter a title for your report. It should be short, around 30-50 characters.";
-        private const string STEP_CTG = "I see you're in CTG. Is this report for a CTG build? Just reply yes or no.";
+        private const string STEP_CTG = "I see you're in CTG. Is this report for a CTG build? Just reply yes or no.\r\n" +
+                                        "**If you enter 'no', your report will be publicly visible __with your name__**\r\n" +
+                                        "***__THIS INCLUDES SURVIVAL BRANCH__***";
 
         private const string STEP_DESCRIPTION = "Now describe your problem as thoroughly as you can. We __greatly__ prefer a format like this:\r\n" +
                                                 "**Reproduction rate:** 100%\r\n\r\n" +
@@ -33,6 +38,7 @@ namespace RexBot
                                                 //"**Steps to reproduce:**\r\n1. Build a spotlight\r\n2. Try to turn it on in the terminal.\r\n\r\n" +
                                                 "You can use Markdown to format your report: https://jira.atlassian.com/secure/WikiRendererHelpAction.jspa?section=all \r\n" +
                                                 "Do note there is a minimum length requirement of 200 characters.\r\n" +
+                                                "You should put your Steps To Reproduce this problem in the next step.\r\n" +
                                                 "You can send your description as several messages if you want, send `!done` when you're done.";
 
         private const string STEP_STR = "Please describe steps to reproduce your problem. Note there is a 50 character minimum for this field. e.g.:\r\n" +
@@ -45,18 +51,18 @@ namespace RexBot
                                                 "It is *very* helpful if you include your game log, located at `%AppData%\\Space Engineers\\SpaceEngineers.log`\r\n" +
                                                 "When you're done attaching files, just reply `!done`";
 
-        private const string STEP_CONFIRM = "Great! Your report is ready to go. Before it's submitted, please review your report. " +
+        private const string STEP_CONFIRM = "Your report is ready to go. Before it's submitted, please review your report. " +
                                             "You can use `!back` to step back to any field you want to edit, or just send `!done` to send the report.";
         public readonly ulong ChannelId;
         public readonly ulong UserId;
 
         public string Summary;
         public string Version;
-        public string STR;
+        public string STR = string.Empty;
         public bool BadVersion;
         public string Description;
         public bool CTG;
-        private RestDMChannel DMChannel;
+        private IDMChannel DMChannel;
         private Dictionary<Attachment, string> Attachments = new Dictionary<Attachment, string>();
         public StepEnum CurrentStep;
         public JiraManager.ProjectKey Game;
@@ -77,7 +83,7 @@ namespace RexBot
             Finished,
         }
 
-        public BugreportBuilder(ulong userId, RestDMChannel channel)
+        public BugreportBuilder(ulong userId, IDMChannel channel)
         {
             DMChannel = channel;
             ChannelId = channel.Id;
@@ -93,6 +99,12 @@ namespace RexBot
             
             Utilities.Log($"BugBuilder: {msg.Author.NickOrUserName()}: {CurrentStep}: {msg.Content}");
 
+            if (Utilities.HasProfanity(msg.Content))
+            {
+                await DMChannel.SendMessageAsync("Profanity not allowed.");
+                return;
+            }
+
             if (msg.Content.Equals("!cancel", StringComparison.CurrentCultureIgnoreCase))
             {
                 await DMChannel.SendMessageAsync("Okay, cancelling this report.");
@@ -104,6 +116,13 @@ namespace RexBot
             {
                 await DMChannel.SendMessageAsync("Okay, I won't upload this bug report.");
                 _upload = false;
+                return;
+            }
+
+            if (msg.Content.Equals("!debug", StringComparison.CurrentCultureIgnoreCase))
+            {
+                await ShowSummaryDebug(msg);
+                CurrentStep=StepEnum.Finished;
                 return;
             }
 
@@ -164,6 +183,8 @@ namespace RexBot
                     Game = JiraManager.ProjectKey.SE;
                     CurrentStep = StepEnum.Version;
                     await DMChannel.SendMessageAsync(STEP_VERSION_SE);
+                    if (!string.IsNullOrEmpty(RexBotCore.Instance.Jira.LastSpaceVersion))
+                        await DMChannel.SendMessageAsync($"The latest version repoted by Keen news is {RexBotCore.Instance.Jira.LastSpaceVersion}");
                     return;
                 }
                 else if (msg.Content.Equals("ME", StringComparison.CurrentCultureIgnoreCase))
@@ -171,6 +192,8 @@ namespace RexBot
                     Game = JiraManager.ProjectKey.ME;
                     CurrentStep = StepEnum.Version;
                     await DMChannel.SendMessageAsync(STEP_VERSION_ME);
+                    if (!string.IsNullOrEmpty(RexBotCore.Instance.Jira.LastMedievalVersion))
+                        await DMChannel.SendMessageAsync($"The latest version repoted by Keen news is {RexBotCore.Instance.Jira.LastMedievalVersion}");
                     return;
                 }
                 else
@@ -183,20 +206,48 @@ namespace RexBot
             switch (CurrentStep)
             {
                 case StepEnum.Summary:
+                    if (msg.Content.Length > 100 || Summary?.Length > 100)
+                    {
+                        await DMChannel.SendMessageAsync("Your summary is too long. It should be short, around 30-50 characters. Please re-enter your summary.");
+                        Summary = string.Empty;
+                        break;
+                    }
                     if (msg.Content.Equals("!done", StringComparison.CurrentCultureIgnoreCase))
                     {
+                        if (Summary?.Length < 10)
+                        {
+                            await DMChannel.SendMessageAsync("Your summary is too short. Please try again.");
+                            break;
+                        }
                         await DMChannel.SendMessageAsync(STEP_DESCRIPTION);
                         CurrentStep = StepEnum.Description;
                         break;
                     }
 
                     Summary = msg.Content;
+                    if (Summary?.Length < 10)
+                    {
+                        await DMChannel.SendMessageAsync("Your summary is too short. Please try again.");
+                        break;
+                    }
+                    if (Summary.Contains('\n'))
+                    {
+                        await DMChannel.SendMessageAsync("Summary cannot contain line breaks. Please enter your summary again.");
+                        Summary = string.Empty;
+                        break;
+                    }
                     await DMChannel.SendMessageAsync(STEP_DESCRIPTION);
                     CurrentStep = StepEnum.Description;
                     break;
                 case StepEnum.Version:
                     if (msg.Content.Equals("!continue", StringComparison.CurrentCultureIgnoreCase))
                     {
+                        if (string.IsNullOrEmpty(Version))
+                        {
+                            await DMChannel.SendMessageAsync("Sorry, you must supply a version.");
+                            break;
+                        }
+
                         BadVersion = true;
                         if (msg.Author.CTG())
                         {
@@ -223,11 +274,22 @@ namespace RexBot
                             await DMChannel.SendMessageAsync("Sorry, I didn't understand your version number. It should look like `1.180.401`");
                             break;
                         }
+                        bool trySub = false;
                         Version = split[1] + "." + split[2].Substring(0, 1);
                         if (RexBotCore.Instance.Jira.CachedVersions.All(v => v.Name != Version))
+                            trySub = true;
+                        if (trySub)
                         {
-                            await DMChannel.SendMessageAsync("Sorry, either you mistyped the version number, or this version is not in my system. If you're sure the version number is right, send `!continue`");
-                            break;
+                            Version = split[1] + "." + split[2];
+                            if (RexBotCore.Instance.Jira.CachedVersions.All(v => v.Name != Version))
+                            {
+                                var matching = RexBotCore.Instance.Jira.CachedVersions.Where(v => v.Name.StartsWith(split[1])).Select(v => "1."+v.Name);
+                                if (matching.Any())
+                                    await DMChannel.SendMessageAsync($"Sorry, either you mistyped the version number, or this version is not in my system. Did you mean one of these? ```{string.Join("\r\n",matching)}```\r\nIf you're sure the version number is right, send `!continue`");
+                                else
+                                    await DMChannel.SendMessageAsync("Sorry, either you mistyped the version number, or this version is not in my system. If you're sure the version number is right, send `!continue`");
+                                break;
+                            }
                         }
                     }
                     else
@@ -309,27 +371,7 @@ namespace RexBot
                 case StepEnum.Attachments:
                     if (msg.Content.Equals("!done", StringComparison.CurrentCultureIgnoreCase))
                     {
-                        await DMChannel.SendMessageAsync(STEP_CONFIRM);
-                        var sb = new StringBuilder();
-                        sb.AppendLine($"Game: {Game}");
-                        sb.AppendLine($"Version {Version}");
-                        if (msg.Author.CTG())
-                            sb.AppendLine($"CTG: {CTG}");
-                        sb.AppendLine($"Summary: {Summary}");
-                        sb.AppendLine($"Description: {Description}");
-                        sb.AppendLine($"STR: {STR}");
-                        sb.AppendLine($"Attachments: {Attachments.Count}");
-                        
-                        var st = sb.ToString();
-                        if (st.Length <= 2000)
-                            await DMChannel.SendMessageAsync(st);
-                        else
-                        {
-                            for (int i = 0; i < st.Length; i += 2000)
-                            {
-                                await DMChannel.SendMessageAsync(st.Substring(i, Math.Min(2000, st.Length - i)));
-                            }
-                        }
+                        await ShowSummary(msg);
 
                         CurrentStep = StepEnum.Confirm;
                     }
@@ -346,14 +388,145 @@ namespace RexBot
                     }
                     break;
                     case StepEnum.Confirm:
-                    if(msg.Content.Equals("!done", StringComparison.CurrentCultureIgnoreCase))
-                        SendReport(msg);
+                        if (msg.Content.Equals("!done", StringComparison.CurrentCultureIgnoreCase))
+                        {
+                            SendReport(msg);
+                        CurrentStep = StepEnum.Finished;
+                        }
+                    if(msg.Content.Equals("!text", StringComparison.CurrentCultureIgnoreCase))
+                        await ShowSummaryText(msg);
                         break;
                 case StepEnum.Finished:
                     break;
                 case StepEnum.Invalid:
                 default:
                     throw new ArgumentOutOfRangeException();
+            }
+        }
+
+        private async Task ShowSummaryDebug(SocketMessage msg)
+        {
+            Game = JiraManager.ProjectKey.SE;
+            Version = "1.180.401";
+            Summary = "Spotlights explode when turned on.";
+            Description = @"**Reproduction rate:** 100%
+
+**Expected behavior: **
+ Spotlight turns on. 
+
+**Observed behavior: **
+ Turning on the spotlight causes it to explode violently.";
+            STR = @"1. Build a spotlight
+2. Try to turn it on in the terminal.
+3. It explodes.";
+            
+            if(msg.Attachments.Any())
+            Attachments.Add(msg.Attachments.First(), "asd");
+            CTG = false;
+            await ShowSummary(msg);
+        }
+        
+        //embed limits
+        //field amount = 25, title/field name = 256, value = 1024, footer text/description = 2048
+        //Note that the sum of all characters in the embed should be less than or equal to 6000.
+        private async Task ShowSummary(SocketMessage msg)
+        {
+            try
+            {
+                if (Summary.Length + Description.Length + (STR?.Length ?? 0) >= 5000)
+                {
+                    await ShowSummaryText(msg);
+                    return;
+                }
+
+                var em = new EmbedBuilder();
+                em.Author = new EmbedAuthorBuilder()
+                            {
+                                IconUrl = msg.Author.GetAvatarUrl(),
+                                Name = "BugBuilder Review"
+                            };
+
+                em.Description = STEP_CONFIRM;
+
+                var cb = new byte[3];
+                _random.NextBytes(cb);
+                em.Color = new Color(cb[0], cb[1], cb[2]);
+                em.Footer = new EmbedFooterBuilder()
+                {
+                    IconUrl = RexBotCore.Instance.RexbotClient.CurrentUser.GetAvatarUrl(),
+                    Text = "Crafted with robotic love ♥"
+                };
+                em.Timestamp = DateTimeOffset.Now;
+
+                em.AddInlineField("Game", Game);
+                em.AddInlineField("Version", Version ?? string.Empty);
+                em.AddInlineField("Attachments", Attachments?.Count ?? 0);
+                if (msg.Author.CTG())
+                    em.AddInlineField("CTG", CTG);
+
+                em.AddField("Summary", Summary ?? string.Empty);
+
+                em.AddField("Description", Description.Substring(0, Math.Min(2048, Description.Length)));
+                if (Description.Length > 2048)
+                {
+                    for (int i = 1; i < Description.Length; i += 2048)
+                    {
+                        em.AddField("", Description.Substring(i, Math.Min(2048, Description.Length - i)));
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(STR))
+                {
+                    em.AddField("STR", STR.Substring(0, Math.Min(2048, STR.Length)));
+                    if (STR.Length > 2048)
+                    {
+                        for (int i = 1; i < STR.Length; i += 2048)
+                        {
+                            em.AddField("", STR.Substring(i, Math.Min(2048, STR.Length - i)));
+                        }
+                    }
+                }
+
+                var at = Attachments.Keys.FirstOrDefault(a => a.Filename.EndsWith(".jpg") || a.Filename.EndsWith(".png"));
+                if (at != null)
+                {
+                    em.ImageUrl = at.Url;
+                }
+
+                await DMChannel.SendMessageAsync("If you can't see this embed, send `!text` to get the text version.", embed: em.Build());
+            }
+            catch (Exception ex)
+            {
+                await ShowSummaryText(msg);
+                Utilities.Log($"Exception in bugbuilder!");
+                var s = ex.ToString();
+                Utilities.Log(s.Substring(0, Math.Min(1000, s.Length)));
+                //throw;
+            }
+        }
+        
+        private async Task ShowSummaryText(SocketMessage msg)
+        {
+            await DMChannel.SendMessageAsync(STEP_CONFIRM);
+            var sb = new StringBuilder();
+            sb.AppendLine($"Game: {Game}");
+            sb.AppendLine($"Version {Version}");
+            if (msg.Author.CTG())
+                sb.AppendLine($"CTG: {CTG}");
+            sb.AppendLine($"Summary: {Summary}");
+            sb.AppendLine($"Description: {Description}");
+            sb.AppendLine($"STR: {STR}");
+            sb.AppendLine($"Attachments: {Attachments.Count}");
+
+            var st = sb.ToString();
+            if (st.Length <= 2000)
+                await DMChannel.SendMessageAsync(st);
+            else
+            {
+                for (int i = 0; i < st.Length; i += 2000)
+                {
+                    await DMChannel.SendMessageAsync(st.Substring(i, Math.Min(2000, st.Length - i)));
+                }
             }
         }
 

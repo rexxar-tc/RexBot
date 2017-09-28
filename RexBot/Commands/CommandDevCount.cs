@@ -20,11 +20,12 @@ namespace RexBot.Commands
             int meCount=0;
             int seCount=0;
             int misCount=0;
+            
+            var devs = RexBotCore.Instance.KeenGuild.Users.Where(u => u.Roles.Any(r => r.Id == 125014635383357440ul));
 
-            var devs = RexBotCore.Instance.KeenGuild.Users.Where(u => u.Roles.Any(r => r.Name == "Developer"));
-
-            foreach (var dev in devs)
+            foreach (var u in devs)
             {
+                var dev = RexBotCore.Instance.KeenGuild.GetUser(u.Id);
                 if (dev.Status == UserStatus.Offline)
                     continue;
                 if (dev.NickOrUserName().StartsWith("[SE]"))

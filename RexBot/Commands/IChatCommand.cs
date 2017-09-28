@@ -9,6 +9,7 @@ namespace RexBot.Commands
         None,
         Public,
         Modder,
+        Moderator,
         Developer,
         Rexxar,
     }

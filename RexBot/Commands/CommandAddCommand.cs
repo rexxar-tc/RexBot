@@ -52,8 +52,11 @@ namespace RexBot.Commands
                 }
             }
 
-            if (RexBotCore.Instance.InfoCommands.Any(c => c.Command == newCommand))
+            if (RexBotCore.Instance.InfoCommands.Any(c => c.Command.Equals(newCommand, StringComparison.CurrentCultureIgnoreCase)))
                 return $"There is already a command with the key {newCommand}. Please try again!";
+
+            if (RexBotCore.Instance.ChatCommands.Any(c => c.Command.Equals(newCommand, StringComparison.CurrentCultureIgnoreCase)))
+                return $"There is already a system command with the key {newCommand}.";
 
             RexBotCore.Instance.InfoCommands.Add(new RexBotCore.InfoCommand(newCommand, response, message.Author.Id, isPublic, image));
             RexBotCore.Instance.SaveCommands();

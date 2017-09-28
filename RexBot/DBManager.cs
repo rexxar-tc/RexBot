@@ -55,7 +55,8 @@ namespace RexBot
         {
             try
             {
-                if ((msg.Channel as SocketGuildChannel)?.Guild.Id != 125011928711036928)
+                var c = msg?.Channel as SocketGuildChannel;
+                if (c?.Guild.Id != 125011928711036928)
                 {
                     //Console.WriteLine("bad guild edit");
                     return;
