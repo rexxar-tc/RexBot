@@ -17,7 +17,7 @@ namespace RexBot.Commands
         public async Task<string> Handle(SocketMessage message)
         {
             bool isRexxar = message.Author.Id == RexBotCore.REXXAR_ID;
-            if (message.Channel.Id != 263612647579189248)
+            if (message.Channel.Id != 345301157272354837)
                 isRexxar = false;
 
             if (message.Content.Length == Command.Length)

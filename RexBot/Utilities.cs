@@ -87,7 +87,10 @@ namespace RexBot
         public static void Log(string message)
         {
             Console.WriteLine($"[{DateTime.Now}] {message}");
-            LogChannel.SendMessageAsync(message);
+            if (message.Length <= 2000)
+                LogChannel.SendMessageAsync(message);
+            else
+                LogChannel.SendMessageAsync(message.Substring(0,2000));
         }
 
         public static void Log(object obj)

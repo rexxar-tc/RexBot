@@ -131,7 +131,7 @@ namespace RexBot
                              CachedVersions.AddRange(p.GetVersionsAsync().Result);
                              Console.WriteLine($"Got {CachedVersions.Count} Versions");
                              //Console.WriteLine(string.Join(", ", CachedVersions.Select(v => v.Name)));
-                             CachedIssues = GetIssues();
+                             GetIssues(CachedIssues);
                          }
                          catch (Exception ex)
                          {
@@ -156,7 +156,7 @@ namespace RexBot
                 CachedVersions.AddRange(p.GetVersionsAsync().Result);
                 var oldIssues = new List<CachedIssue>(CachedIssues);
                 CachedIssues.Clear();
-                CachedIssues = GetIssues();
+                GetIssues(CachedIssues);
 
                 if (oldIssues.Count == 0)
                     oldIssues = CachedIssues;
@@ -268,7 +268,7 @@ namespace RexBot
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
+                Utilities.Log(ex);
             }
         }
 
@@ -400,6 +400,7 @@ namespace RexBot
                 {
                     case ProjectKey.SE:
                         issue["Epic Link"] = REXBOT_SE_EPIC;
+                        issue["Regression"] = "None";
                         break;
                     case ProjectKey.ME:
                         issue["Epic Link"] = REXBOT_ME_EPIC;
@@ -455,7 +456,9 @@ namespace RexBot
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
+                //Console.WriteLine(ex);
+                Utilities.Log($"<@{RexBotCore.REXXAR_ID}> Error submitting ticket.");
+                Utilities.Log(ex);
                 return null;
             }
         }
@@ -598,7 +601,7 @@ namespace RexBot
         //    }
         //}
 
-        public List<CachedIssue> GetIssues()
+        public void GetIssues(List<CachedIssue> list)
         {
             IQueryable<Issue> issues = from i in jira.Issues.Queryable
                                        where i.Reporter == new LiteralMatch("Rex bot")
@@ -628,16 +631,14 @@ namespace RexBot
                     break;
             }
 
-            var result = new List<CachedIssue>();
+            list.Clear();
             foreach (Issue issue in cache)
             {
                 var c = new CachedIssue(issue, GetMetadata(issue));
                 if (c.Metadata == null)
                     continue;
-                result.Add(c);
+                list.Add(c);
             }
-            
-            return result;
         }
 
         public IssueMetadata GetMetadata(Issue issue)

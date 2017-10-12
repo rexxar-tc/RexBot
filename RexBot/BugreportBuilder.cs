@@ -557,8 +557,17 @@ namespace RexBot
                                         }
                                         else
                                             key = "TEST";
-                                        Utilities.Log($"Added ticket: {key}");
-                                        await DMChannel.SendMessageAsync($"Thank you for your report! Report number: {key}");
+
+                                        if (string.IsNullOrEmpty(key))
+                                        {
+                                            Utilities.Log("Error adding ticket");
+                                            await DMChannel.SendMessageAsync("There was an error submitting your report :frowning: Please notify Rexxar");
+                                        }
+                                        else
+                                        {
+                                            Utilities.Log($"Added ticket: {key}");
+                                            await DMChannel.SendMessageAsync($"Thank you for your report! Report number: {key}");
+                                        }
                                     });
 
             var start = DateTime.Now;
