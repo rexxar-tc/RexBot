@@ -122,6 +122,22 @@
       <HintPath>..\packages\log4net.2.0.3\lib\net40-full\log4net.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="Manatee.Json, Version=6.0.0.0, Culture=neutral, PublicKeyToken=c267f67a39449c62, processorArchitecture=MSIL">
+      <HintPath>..\packages\Manatee.Json.6.0.3\lib\net45\Manatee.Json.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Manatee.Trello, Version=0.0.0.0, Culture=neutral, PublicKeyToken=f502fcc17fc907d6, processorArchitecture=MSIL">
+      <HintPath>..\packages\Manatee.Trello.1.18.3\lib\net45\Manatee.Trello.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Manatee.Trello.ManateeJson, Version=1.0.0.0, Culture=neutral, PublicKeyToken=fbb8336f4f768592, processorArchitecture=MSIL">
+      <HintPath>..\packages\Manatee.Trello.ManateeJson.1.8.1\lib\net45\Manatee.Trello.ManateeJson.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Manatee.Trello.WebApi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=f7ae00e0424b8d0e, processorArchitecture=MSIL">
+      <HintPath>..\packages\Manatee.Trello.WebApi.1.1.0.1\lib\net45\Manatee.Trello.WebApi.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="Microsoft.CodeAnalysis, Version=2.3.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.CodeAnalysis.Common.2.3.0-beta2\lib\netstandard1.3\Microsoft.CodeAnalysis.dll</HintPath>
       <Private>True</Private>
@@ -231,6 +247,10 @@
       <HintPath>..\packages\System.Net.Http.4.3.0\lib\net46\System.Net.Http.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="System.Net.Http.Formatting, Version=5.2.3.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.AspNet.WebApi.Client.5.2.3\lib\net45\System.Net.Http.Formatting.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="System.Net.NameResolution, Version=4.0.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <HintPath>..\packages\System.Net.NameResolution.4.3.0\lib\net46\System.Net.NameResolution.dll</HintPath>
       <Private>True</Private>
@@ -287,6 +307,10 @@
     </Reference>
     <Reference Include="System.ValueTuple, Version=4.0.1.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>..\packages\System.ValueTuple.4.3.0\lib\netstandard1.0\System.ValueTuple.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Web.Http, Version=5.2.3.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.AspNet.WebApi.Core.5.2.3\lib\net45\System.Web.Http.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="System.Xml.Linq" />
@@ -355,6 +379,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ScriptManager.cs" />
     <Compile Include="Sheets.cs" />
+    <Compile Include="TrelloManager.cs" />
     <Compile Include="Utilities.cs" />
   </ItemGroup>
   <ItemGroup>

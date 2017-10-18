@@ -81,12 +81,21 @@ namespace RexBot
         public IssueMetadata Metadata;
         public string Key;
         public IEnumerable<Comment> Comments;
+        public JiraManager.ProjectKey Project;
+
 
         public CachedIssue(Issue issue, IssueMetadata meta)
+            : this(issue, issue.Key.Value.StartsWith("SE") ? JiraManager.ProjectKey.SE : JiraManager.ProjectKey.ME, meta)
+        {
+        }
+        
+
+        public CachedIssue(Issue issue, JiraManager.ProjectKey project, IssueMetadata meta)
         {
             Issue = issue;
             Comments = issue.GetCommentsAsync().Result;
             Metadata = meta;
+            Project = project;
             Key = issue.Key.Value;
         }
     }
@@ -165,6 +174,10 @@ namespace RexBot
 
                 for (int i = 0; i < data.Length; i++)
                     data[i] = new List<IList<object>>();
+
+                Console.WriteLine($"[{DateTime.Now}]: Updating Trello...");
+                RexBotCore.Instance.Trello.UpdateOrAddMany(CachedIssues);
+                Console.WriteLine($"[{DateTime.Now}]: Update done.");
 
                 foreach (var newIssue in CachedIssues)
                 {
@@ -370,7 +383,7 @@ namespace RexBot
             }
         }
 
-        public async Task<string> AddIssue(ProjectKey project, string description, string version, IssueMetadata meta, Dictionary<Attachment, string> attachments = null)
+        public async Task<CachedIssue> AddIssue(ProjectKey project, string description, string version, IssueMetadata meta, Dictionary<Attachment, string> attachments = null)
         {
             string summary;
             if (description.Length > 50)
@@ -383,7 +396,7 @@ namespace RexBot
             return await AddIssue(project, summary, description, version, meta, attachments);
         }
 
-        public async Task<string> AddIssue(ProjectKey project, string summary, string description, string version, IssueMetadata meta, Dictionary<Attachment, string> attachments = null)
+        public async Task<CachedIssue> AddIssue(ProjectKey project, string summary, string description, string version, IssueMetadata meta, Dictionary<Attachment, string> attachments = null)
         {
             try
             {
@@ -452,7 +465,8 @@ namespace RexBot
                 }
 
                 //CachedIssues.Add(new CachedIssue(issue, meta));
-                return issue.Key.Value;
+                //return issue.Key.Value;
+                return new CachedIssue(issue, project, meta);
             }
             catch (Exception ex)
             {

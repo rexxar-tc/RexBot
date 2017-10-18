@@ -544,29 +544,30 @@ namespace RexBot
             //return;
             var jiraTask = Task.Run(async () =>
                                     {
-                                        string key;
+                                        CachedIssue issue;
                                         if (_upload)
                                         {
                                             if (!BadVersion)
-                                                key = await RexBotCore.Instance.Jira.AddIssue(Game, Summary, Description, Version, new IssueMetadata(msg) {IsCTG = CTG}, Attachments);
+                                                issue = await RexBotCore.Instance.Jira.AddIssue(Game, Summary, Description, Version, new IssueMetadata(msg) {IsCTG = CTG}, Attachments);
                                             else
                                             {
                                                 Description = $"*VERSION NOT IN JIRA AT TIME OF REPORT. REPORTED VERSION: {Version}*\r\n\r\n{Description}";
-                                                key = await RexBotCore.Instance.Jira.AddIssue(Game, Summary, Description, null, new IssueMetadata(msg) {IsCTG = CTG}, Attachments);
+                                                issue = await RexBotCore.Instance.Jira.AddIssue(Game, Summary, Description, null, new IssueMetadata(msg) {IsCTG = CTG}, Attachments);
                                             }
                                         }
                                         else
-                                            key = "TEST";
+                                            issue = null;
 
-                                        if (string.IsNullOrEmpty(key))
+                                        if (issue == null)
                                         {
                                             Utilities.Log("Error adding ticket");
-                                            await DMChannel.SendMessageAsync("There was an error submitting your report :frowning: Please notify Rexxar");
+                                            await DMChannel.SendMessageAsync("There was an error submitting your report :frowning: Rexxar has already been notified.");
                                         }
                                         else
                                         {
-                                            Utilities.Log($"Added ticket: {key}");
-                                            await DMChannel.SendMessageAsync($"Thank you for your report! Report number: {key}");
+                                            string url = RexBotCore.Instance.Trello.AddIssue(issue);
+                                            Utilities.Log($"Added ticket: {issue.Key}");
+                                            await DMChannel.SendMessageAsync($"Thank you for your report! Report number: {issue.Key} Trello card: {url}");
                                         }
                                     });
 

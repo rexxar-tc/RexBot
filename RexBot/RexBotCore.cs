@@ -72,6 +72,7 @@ namespace RexBot
         private readonly Timer _statusTimer = new Timer(20 * 60 * 1000);
         public JiraManager Jira;
         public Sheets PublicSheet;
+        public TrelloManager Trello;
         public DiscordSocketClient RexbotClient;
 
         public DiscordSocketClient RexxarClient;
@@ -101,14 +102,14 @@ namespace RexBot
                 //Trace.Listeners.Clear();
                 //Trace.Listeners.Add(new TextWriterTraceListener(Console.Out));
                 Console.CancelKeyPress += Console_CancelKeyPress;
-                List<Token> tokens = LoadTokens();
+                var tokens = LoadTokens();
                 ScanAssemblyForCommands();
                 LoadCommands();
                 _statusTimer.Elapsed += async (sender, args) => await SetRandomStatus();
                 await Login(tokens);
                 _statusTimer.Start();
-                string ctgKey = tokens.First(t => t.Name == "CTGSheet").Value;
-                string publicKey = tokens.First(t => t.Name == "PublicSheet").Value;
+                string ctgKey = tokens["CTGSheet"];
+                string publicKey = tokens["PublicSheet"];
                 CTGSheet = new Sheets(ctgKey);
                 PublicSheet = new Sheets(publicKey);
                 CommandBugReport.PublicList = publicKey;
@@ -123,8 +124,10 @@ namespace RexBot
                 }
                 LoadBanned();
                 LoadOverrides();
+#if !DEBUG
                 Console.WriteLine("Loading missed history");
                 await GetMissingHistory();
+#endif
                 Console.WriteLine("Ready");
                 await Task.Delay(-1);
             }
@@ -152,7 +155,7 @@ namespace RexBot
             DBManager.Close();
         }
 
-        private async Task<bool> Login(List<Token> tokens)
+        private async Task<bool> Login(Dictionary<string, string> tokens)
         {
             Console.WriteLine("Authenticating...");
             try
@@ -165,7 +168,7 @@ namespace RexBot
 
                 if (RexbotClient == null)
                     RexbotClient = new DiscordSocketClient(new DiscordSocketConfig() {MessageCacheSize = 1000});
-                 await RexbotClient.LoginAsync(TokenType.Bot, tokens.First(t => t.Name == "rexbot").Value);
+                 await RexbotClient.LoginAsync(TokenType.Bot, tokens["rexbot"]);
                  await RexbotClient.StartAsync();
 
                 AutoResetEvent e = new AutoResetEvent(false);
@@ -182,12 +185,13 @@ namespace RexBot
                 //await RexxarClient.SetStatusAsync(UserStatus.Invisible);
                 await SetRandomStatus();
                 //await RexbotClient.SetGame( "Try !bugreport" );
+                
                 RexbotClient.MessageReceived += RexbotMessageReceived;
                 RexbotClient.JoinedGuild += RexbotJoinedGuild;
                 KeenGuild = RexbotClient.GetGuild(125011928711036928);
                 
-                Jira = new JiraManager(tokens.First(t => t.Name == "JiraURL").Value, "rex.bot", tokens.First(t => t.Name == "JiraPass").Value);
-                
+                Jira = new JiraManager(tokens["JiraURL"], "rex.bot", tokens["JiraPass"]);
+                Trello = new TrelloManager(tokens["TrelloKey"], tokens["TrelloToken"], tokens["TrelloPublic"], tokens["TrelloCTG"]);
                 Console.WriteLine("Ready.");
             }
             catch (Exception ex)
@@ -242,7 +246,7 @@ namespace RexBot
             Console.WriteLine("Ok.");
         }
 
-        public List<Token> LoadTokens()
+        public Dictionary<string, string> LoadTokens()
         {
             string filename = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tokens.xml");
             if (!File.Exists(filename))
@@ -264,7 +268,7 @@ namespace RexBot
                 reader.Close();
             }
 
-            return tokens;
+            return tokens.ToDictionary(t => t.Name, t => t.Value);
         }
 
         public void LoadBanned()
@@ -398,7 +402,12 @@ namespace RexBot
         private async Task RexbotMessageReceived(SocketMessage message)
         {
             ISocketMessageChannel channel = message.Channel;
-           
+
+#if DEBUG
+            if (message.Author.Id != REXXAR_ID)
+                return;
+#endif
+
             if (message.Author.Id == REXBOT_ID || message.Author.Id == 186606257317085184)
                 return;
 
