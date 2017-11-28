@@ -5,13 +5,13 @@ using System.IO;
 using System.Net;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.Remoting.Messaging;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Serialization;
-using Discord;
 using Discord.Addons.EmojiTools;
-using Discord.WebSocket;
+using DSharpPlus;
+using DSharpPlus.Entities;
 using RexBot.Commands;
 using Timer = System.Timers.Timer;
 
@@ -61,7 +61,7 @@ namespace RexBot
                                                              "The Talos Principle",
                                                          };
 
-        private static List<ulong> _bannedUsers = new List<ulong>();
+        private static HashSet<ulong> _bannedUsers = new HashSet<ulong>();
         private static Dictionary<string, Dictionary<ulong, bool>> _permissionOverrides;
 
         private Random _random = new Random();
@@ -73,11 +73,11 @@ namespace RexBot
         public JiraManager Jira;
         public Sheets PublicSheet;
         public TrelloManager Trello;
-        public DiscordSocketClient RexbotClient;
+        public DiscordClient RexbotClient;
 
-        public DiscordSocketClient RexxarClient;
+        public DiscordClient RexxarClient;
 
-        public SocketGuild KeenGuild;
+        public DiscordGuild KeenGuild;
 
         public Sheets CTGSheet;
         public static RexBotCore Instance => _instance ?? (_instance = new RexBotCore());
@@ -85,7 +85,7 @@ namespace RexBot
         public List<InfoCommand> InfoCommands { get; private set; } = new List<InfoCommand>();
         public List<IChatCommand> ChatCommands { get; } = new List<IChatCommand>();
 
-        public List<ulong> BannedUsers => _bannedUsers;
+        public HashSet<ulong> BannedUsers => _bannedUsers;
         public Dictionary<string, Dictionary<ulong, bool>> PermissionOverrides => _permissionOverrides;
 
         public DBManager DBManager;
@@ -160,35 +160,46 @@ namespace RexBot
             Console.WriteLine("Authenticating...");
             try
             {
-                //if (RexxarClient == null)
-                //    RexxarClient = new DiscordSocketClient();
-                //await RexxarClient.LoginAsync(TokenType.User, tokens.First(t => t.Name == "rexxar").Value);
-                //await RexxarClient.StartAsync();
-                //RexxarClient.MessageReceived += RexxarMessageReceived;
+//#if !DEBUG
+//                if (RexxarClient == null)
+//                    RexxarClient = new DiscordSocketClient();
+//                await RexxarClient.LoginAsync(TokenType.User, tokens["rexxar"]);
+//                await RexxarClient.StartAsync();
+//                RexxarClient.MessageReceived += RexxarMessageReceived;
+//#endif
+                //if (RexbotClient == null)
+                    RexbotClient = new DiscordClient(new DiscordConfiguration()
+                                                     {
+                                                         //MessageCacheSize = 1000,
+                                                         Token = tokens["rexbot"],
+                                                         TokenType = TokenType.Bot
+                                                     });
+                await RexbotClient.ConnectAsync();
 
-                if (RexbotClient == null)
-                    RexbotClient = new DiscordSocketClient(new DiscordSocketConfig() {MessageCacheSize = 1000});
-                 await RexbotClient.LoginAsync(TokenType.Bot, tokens["rexbot"]);
-                 await RexbotClient.StartAsync();
+                //AutoResetEvent e = new AutoResetEvent(false);
+                //RexbotClient.Ready += delegate
+                //                      {
+                //                          e.Set();
+                //                          return Task.CompletedTask;
+                //                      };
 
-                AutoResetEvent e = new AutoResetEvent(false);
-                RexbotClient.Ready += delegate
-                                      {
-                                          e.Set();
-                                          return Task.CompletedTask;
-                                      };
+                //Console.WriteLine("Waiting for fucking Volt");
+                //e.WaitOne();
+                //Console.WriteLine("Waiting done.");
 
-                Console.WriteLine("Waiting for fucking Volt");
-                e.WaitOne();
-                Console.WriteLine("Waiting done.");
-
+#if !DEBUG
                 //await RexxarClient.SetStatusAsync(UserStatus.Invisible);
                 await SetRandomStatus();
                 //await RexbotClient.SetGame( "Try !bugreport" );
-                
-                RexbotClient.MessageReceived += RexbotMessageReceived;
-                RexbotClient.JoinedGuild += RexbotJoinedGuild;
-                KeenGuild = RexbotClient.GetGuild(125011928711036928);
+#else
+                await RexbotClient.UpdateStatusAsync(null, UserStatus.Invisible);
+#endif
+                RexbotClient.MessageCreated += RexbotClient_MessageCreated;
+                RexbotClient.GuildCreated += RexbotClient_GuildCreated;
+                KeenGuild = await RexbotClient.GetGuildAsync(125011928711036928);
+                Utilities.CTGChannels = new HashSet<DiscordChannel>();
+                foreach(var id in Utilities.CTGChannelIds)
+                    Utilities.CTGChannels.Add(await RexbotClient.GetChannelAsync(id));
                 
                 Jira = new JiraManager(tokens["JiraURL"], "rex.bot", tokens["JiraPass"]);
                 Trello = new TrelloManager(tokens["TrelloKey"], tokens["TrelloToken"], tokens["TrelloPublic"], tokens["TrelloCTG"]);
@@ -202,14 +213,16 @@ namespace RexBot
             }
             return true;
         }
-        
-        private async Task RexbotJoinedGuild(SocketGuild arg)
+
+
+        private async Task RexbotClient_GuildCreated(DSharpPlus.EventArgs.GuildCreateEventArgs e)
         {
+            var arg = e.Guild;
             Console.WriteLine($"Added to guild: '{arg.Name}'");
-            if (!arg.Users.Any(u => u.Id == REXXAR_ID))
+            if (!arg.Members.Any(u => u.Id == REXXAR_ID))
             {
                 Console.WriteLine("Rexxar not in this guild. Leaving.");
-                var chan = arg.DefaultChannel;
+                var chan = arg.GetDefaultChannel();
                 await chan.SendMessageAsync("You are not authorized to use this bot!");
                 await arg.LeaveAsync();
             }
@@ -227,15 +240,15 @@ namespace RexBot
 
         public void LoadCommands()
         {
-            string filename = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "InfoCommands.xml");
-            if (!File.Exists(filename))
+            string FileName = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "InfoCommands.xml");
+            if (!File.Exists(FileName))
             {
                 Console.WriteLine("InfoCommands file not found!");
                 InfoCommands = new List<InfoCommand>();
                 return;
             }
             Console.WriteLine("Loading info commands...");
-            using (var reader = new StreamReader(filename))
+            using (var reader = new StreamReader(FileName))
             {
                 var x = new XmlSerializer(typeof(List<InfoCommand>));
                 InfoCommands = (List<InfoCommand>)x.Deserialize(reader);
@@ -248,14 +261,14 @@ namespace RexBot
 
         public Dictionary<string, string> LoadTokens()
         {
-            string filename = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tokens.xml");
-            if (!File.Exists(filename))
+            string FileName = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tokens.xml");
+            if (!File.Exists(FileName))
             {
                 Console.WriteLine("Tokens file not found!");
                 return null;
             }
             List<Token> tokens;
-            using (var reader = new StreamReader(filename))
+            using (var reader = new StreamReader(FileName))
             {
                 Console.WriteLine("Reading tokens...");
                 var x = new XmlSerializer(typeof(List<Token>));
@@ -273,19 +286,19 @@ namespace RexBot
 
         public void LoadBanned()
         {
-            string filename = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BannedUsers.xml");
-            if (!File.Exists(filename))
+            string FileName = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BannedUsers.xml");
+            if (!File.Exists(FileName))
             {
                 Console.WriteLine("Banned users file not found.");
-                _bannedUsers = new List<ulong>();
+                _bannedUsers = new HashSet<ulong>();
                 return;
             }
 
             Console.WriteLine("Loading banned users...");
-            using (var reader = new StreamReader(filename))
+            using (var reader = new StreamReader(FileName))
             {
                 var x = new XmlSerializer(typeof(List<ulong>));
-                _bannedUsers = (List<ulong>)x.Deserialize(reader);
+                _bannedUsers = new HashSet<ulong>((List<ulong>)x.Deserialize(reader));
                 reader.Close();
             }
 
@@ -298,15 +311,15 @@ namespace RexBot
             using (var writer = new StreamWriter(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BannedUsers.xml")))
             {
                 var x = new XmlSerializer(typeof(List<ulong>));
-                x.Serialize(writer, _bannedUsers);
+                x.Serialize(writer, _bannedUsers.ToList());
                 writer.Close();
             }
         }
 
         public void LoadOverrides()
         {
-            string filename = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PermissionOverride.xml");
-            if (!File.Exists(filename))
+            string FileName = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PermissionOverride.xml");
+            if (!File.Exists(FileName))
             {
                 Console.WriteLine("Permission override file not found.");
                 _permissionOverrides = new Dictionary<string, Dictionary<ulong, bool>>();
@@ -314,7 +327,7 @@ namespace RexBot
             }
 
             Console.WriteLine("Loading permission overrides...");
-            using (var reader = new StreamReader(filename))
+            using (var reader = new StreamReader(FileName))
             {
                 int count=0;
                 var x = new XmlSerializer(typeof(List<CommandOverride>));
@@ -399,9 +412,10 @@ namespace RexBot
             }
         }
 
-        private async Task RexbotMessageReceived(SocketMessage message)
+        private async Task RexbotClient_MessageCreated(DSharpPlus.EventArgs.MessageCreateEventArgs e)
         {
-            ISocketMessageChannel channel = message.Channel;
+            var message = e.Message;
+            var channel = e.Channel;
 
 #if DEBUG
             if (message.Author.Id != REXXAR_ID)
@@ -411,17 +425,17 @@ namespace RexBot
             if (message.Author.Id == REXBOT_ID || message.Author.Id == 186606257317085184)
                 return;
 
-            if(message.Author.Id == REXXAR_ID && message.Attachments.FirstOrDefault()?.Filename.Equals("RexBot.exe", StringComparison.CurrentCultureIgnoreCase) == true)
+            if(message.Author.Id == REXXAR_ID && message.Attachments.FirstOrDefault()?.FileName.Equals("RexBot.exe", StringComparison.CurrentCultureIgnoreCase) == true)
             {        
                 const string BAT = @"@ECHO OFF
 SLEEP 20
 DEL RexBot.exe
 REN RexBot.new RexBot.exe
-RexBot.exe";
+start RexBot.exe";
                 using (var client = new WebClient())
                 {
-                    string filename = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "RexBot.new");
-                    client.DownloadFile(message.Attachments.First().Url, filename);
+                    string FileName = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "RexBot.new");
+                    client.DownloadFile(message.Attachments.First().Url, FileName);
                 }
 
                 await message.Channel.SendMessageAsync("Received update. Restarting...");
@@ -435,14 +449,14 @@ RexBot.exe";
                 Environment.Exit(1);
             }
 
-            if (message.MentionedUsers.Any(u => u.Id == REXXAR_ID))
-            {
+            //if (message.MentionedUsers.Any(u => u.Id == REXXAR_ID))
+            //{
                 //if (Regex.IsMatch(message.Content, @"fix.*it", RegexOptions.IgnoreCase))
                 //{
                 //    Console.WriteLine($"{DateTime.Now}: [{channel.ServerName()}: {channel.Name}] {message.Author.Username}: {message.Content}");
                 //    await channel.SendMessageAsync($"{message.Author.Mention} {FIXIT_RESPONSE}");
                 //}
-            }
+            //}
 
             if (_bannedUsers.Contains(message.Author.Id))
             {
@@ -504,8 +518,7 @@ RexBot.exe";
                             await channel.SendFileAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, command.Response), message.Author.Mention);
                         else
                         {
-                            EmbedBuilder em = new EmbedBuilder();
-                            em.ImageUrl = command.Response;
+                            var em = new DiscordEmbedBuilder {ImageUrl = command.Response};
                             await channel.SendMessageAsync(message.Author.Mention, embed: em.Build());
                         }
                     }
@@ -524,7 +537,7 @@ RexBot.exe";
 
                     bool? ovr = null;
                     Dictionary<ulong, bool> d;
-                    if (_permissionOverrides.TryGetValue(command.Command, out d))
+                    if (_permissionOverrides != null && _permissionOverrides.TryGetValue(command.Command, out d))
                     {
                         bool b;
                         if (d.TryGetValue(message.Author.Id, out b))
@@ -572,9 +585,10 @@ RexBot.exe";
 
         }
 
-        private async Task RexxarMessageReceived(SocketMessage message)
+        private async Task RexxarClient_MessageCreated(DSharpPlus.EventArgs.MessageCreateEventArgs e)
         {
-            ISocketMessageChannel channel = message.Channel;
+            var message = e.Message;
+            var channel = message.Channel;
 
             //if (channel.Id == 269660270769471488)
             //{
@@ -584,10 +598,10 @@ RexBot.exe";
             if (message.Author.Id == RexxarClient.CurrentUser.Id)
                 return;
 
-            if (!(channel is SocketGuildChannel))
+            if (channel is DiscordDmChannel)
             {
                 bool asking = Regex.IsMatch(message.Content, @"can.*ask.*question|have.*question", RegexOptions.IgnoreCase);
-                IEnumerable<IMessage> messages = await channel.GetMessagesAsync(21).Flatten();
+                IEnumerable<DiscordMessage> messages = await channel.GetMessagesAsync(21);
                 int count = messages.Count();
                 if (((count < 2) || asking) && (count < 20))
                 {
@@ -635,7 +649,7 @@ RexBot.exe";
             Last5Status.Enqueue(status);
 
             Console.WriteLine($"Setting status to random entry: {status}");
-            await RexbotClient.SetGameAsync(status);
+            await RexbotClient.UpdateStatusAsync(new DiscordGame(status));
             return status;
         }
 
@@ -645,33 +659,35 @@ RexBot.exe";
             bool updating = true;
             long minDate = long.MaxValue;
             long minDateLocal = long.MaxValue;
-            List<IMessage> _messages = new List<IMessage>();
-            ISocketMessageChannel _currentChannel = null;
+            List<DiscordMessage> _messages = new List<DiscordMessage>();
+            DiscordChannel _currentChannel = null;
 
-            SocketGuild server = Instance.KeenGuild;
+            DiscordGuild server = Instance.KeenGuild;
             
-            var channels = server.TextChannels;
+            var channels = server.Channels;
 
             var compareTime = TimeSpan.FromHours(1);
+            var member = await server.GetMemberAsync(REXBOT_ID);
 
-            foreach (var c in channels)
+            foreach (var channel in channels)
             {
                 try
                 {
-                    var channel = c as ISocketMessageChannel;
                     if (channel == null)
                         continue;
 
-                    Console.WriteLine($"Switching to {channel.Name}");
+                    if (channel.Type != ChannelType.Text)
+                        continue;
 
-                    var users = await channel.GetUsersAsync().Flatten();
-                    if (!users.Any(u => u.Id == RexBotCore.REXBOT_ID))
+                    Console.WriteLine($"Switching to {channel.Name}");
+                    
+                    if(channel.PermissionsFor(member) == Permissions.None)
                     {
                         Console.WriteLine("No permission here :(");
                         continue;
                     }
                     
-                    var tmp = (await channel.GetMessagesAsync().Flatten()).ToList();
+                    var tmp = (await channel.GetMessagesAsync()).ToList();
                    
                     while (true)
                     {
@@ -687,7 +703,7 @@ RexBot.exe";
                                 break;
                         }
 
-                        tmp = (await channel.GetMessagesAsync(tmp.First(m => m.Timestamp.UtcTicks == tmp.Min(n => n.Timestamp.UtcTicks)).Id, Direction.Before).Flatten()).ToList();
+                        tmp = (await channel.GetMessagesAsync(100, tmp.First(m => m.Timestamp.UtcTicks == tmp.Min(n => n.Timestamp.UtcTicks)).Id)).ToList();
                         if (!tmp.Any())
                             break;
                         //Thread.Sleep(500);

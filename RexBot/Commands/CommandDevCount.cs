@@ -1,10 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
-using Discord;
-using Discord.WebSocket;
+using DSharpPlus.Entities;
 
 namespace RexBot.Commands
 {
@@ -13,20 +10,20 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Public;
         public string Command => "!devcount";
         public string HelpText => "Counts devs.";
-        public Embed HelpEmbed { get; }
+        public DiscordEmbed HelpEmbed { get; }
 
-        public async Task<string> Handle(SocketMessage message)
+        public async Task<string> Handle(DiscordMessage message)
         {
             int meCount=0;
             int seCount=0;
             int misCount=0;
             
-            var devs = RexBotCore.Instance.KeenGuild.Users.Where(u => u.Roles.Any(r => r.Id == 125014635383357440ul));
+            var devs = RexBotCore.Instance.KeenGuild.Members.Where(u => u.Roles.Any(r => r.Id == 125014635383357440ul));
 
             foreach (var u in devs)
             {
-                var dev = RexBotCore.Instance.KeenGuild.GetUser(u.Id);
-                if (dev.Status == UserStatus.Offline)
+                var dev = await RexBotCore.Instance.KeenGuild.GetMemberAsync(u.Id);
+                if (dev.Presence.Status == UserStatus.Offline)
                     continue;
                 if (dev.NickOrUserName().StartsWith("[SE]"))
                     seCount++;

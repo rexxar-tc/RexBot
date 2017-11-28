@@ -1,13 +1,9 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
-using Discord;
-using Discord.API;
-using Discord.WebSocket;
+using DSharpPlus;
+using DSharpPlus.Entities;
 using Timer = System.Timers.Timer;
 
 namespace RexBot.Commands
@@ -17,9 +13,9 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Rexxar;
         public string Command => "!gethistory";
         public string HelpText => "";
-        public Embed HelpEmbed { get; }
+        public DiscordEmbed HelpEmbed { get; }
 
-        public async Task<string> Handle(SocketMessage message)
+        public async Task<string> Handle(DiscordMessage message)
         {
             if (message.Content.Contains("status"))
                 return $"Downloaded {count} messages total. Current channel: {_currentChannel?.Name ?? "UNKN"} Oldest message local: {new DateTime(minDateLocal)} Oldest message global: {new DateTime(minDate)}";
@@ -49,13 +45,13 @@ namespace RexBot.Commands
         private static bool updating;
         private static long minDate = long.MaxValue;
         private static long minDateLocal = long.MaxValue;
-        private List<IMessage> _messages = new List<IMessage>();
-        private ISocketMessageChannel _currentChannel;
+        private List<DiscordMessage> _messages = new List<DiscordMessage>();
+        private DiscordChannel _currentChannel;
 
             Timer timer = new Timer(60 * 1000);
-        public async Task RunInternal(SocketMessage message)
+        public async Task RunInternal(DiscordMessage message)
         {
-            SocketGuild server = RexBotCore.Instance.RexbotClient.GetGuild(125011928711036928);
+            var server = await RexBotCore.Instance.RexbotClient.GetGuildAsync(125011928711036928);
 
             if (server == null)
                 throw new Exception("fuck you and your cow");
@@ -81,35 +77,36 @@ namespace RexBot.Commands
                                };
             DBTimer.Start();
 
-            var channels = server.TextChannels;
-
-            foreach (var c in channels)
+            var channels = server.Channels;
+            var member = await server.GetMemberAsync(RexBotCore.REXBOT_ID);
+            foreach (var channel in channels)
             {
                 try
                 {
-                    var channel = c as ISocketMessageChannel;
                     if (channel == null)
+                        continue;
+
+                    if (channel.Type != ChannelType.Text)
                         continue;
 
                     Console.WriteLine($"Switching to {channel.Name}");
 
-                    var users = await channel.GetUsersAsync().Flatten();
-                    if (!users.Any(u => u.Id == RexBotCore.REXBOT_ID))
+                    if(channel.PermissionsFor(member) == Permissions.None)
                     {
                         Console.WriteLine("No permission here :(");
                         continue;
                     }
 
                     _currentChannel = channel;
-                    var oldest = RexBotCore.Instance.DBManager.GetOldestMessageID(c.Id);
-                    IMessage oldestMsg = null;
+                    var oldest = RexBotCore.Instance.DBManager.GetOldestMessageID(channel.Id);
+                    DiscordMessage oldestMsg = null;
                     if (oldest > 0)
-                        oldestMsg = await c.GetMessageAsync(oldest);
-                    IEnumerable<IMessage> tmp;
+                        oldestMsg = await channel.GetMessageAsync(oldest);
+                    IEnumerable<DiscordMessage> tmp;
                     if (oldestMsg != null)
-                        tmp = await channel.GetMessagesAsync(oldestMsg.Id, Direction.Before).Flatten();
+                        tmp = await channel.GetMessagesAsync(100, oldestMsg.Id);
                     else
-                        tmp = await channel.GetMessagesAsync().Flatten();
+                        tmp = await channel.GetMessagesAsync();
                     minDateLocal = long.MaxValue;
                     while (true)
                     {
@@ -127,7 +124,7 @@ namespace RexBot.Commands
                                 minDateLocal = msg.Timestamp.UtcTicks;
                         }
 
-                        tmp = await channel.GetMessagesAsync(tmp.First(m=>m.Timestamp.UtcTicks == tmp.Min(n => n.Timestamp.UtcTicks)).Id, Direction.Before).Flatten();
+                        tmp = await channel.GetMessagesAsync(100, tmp.First(m=>m.Timestamp.UtcTicks == tmp.Min(n => n.Timestamp.UtcTicks)).Id);
                         if (!tmp.Any())
                             break;
                         //Thread.Sleep(500);

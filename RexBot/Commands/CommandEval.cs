@@ -1,19 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Net.NetworkInformation;
-using System.Reflection;
-using System.Runtime;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using Discord;
-using Discord.WebSocket;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Scripting;
+﻿using System.Threading.Tasks;
+using DSharpPlus.Entities;
 using Microsoft.CodeAnalysis.Scripting;
 
 namespace RexBot.Commands
@@ -23,9 +9,9 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Rexxar;
         public string Command => "!eval";
         public string HelpText => "Runs the given code";
-        public Embed HelpEmbed { get; }
+        public DiscordEmbed HelpEmbed { get; }
 
-        public async Task<string> Handle(SocketMessage message)
+        public async Task<string> Handle(DiscordMessage message)
         {
             string arg = Utilities.StripCommand(this, message.Content);
             string code = arg;

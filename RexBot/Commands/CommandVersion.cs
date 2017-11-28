@@ -1,10 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Discord;
-using Discord.WebSocket;
+﻿using System.Threading.Tasks;
+using DSharpPlus.Entities;
 
 namespace RexBot.Commands
 {
@@ -13,12 +8,12 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Public;
         public string Command => "!version";
         public string HelpText => "Gets the latest version of Space and Medieval Engineers";
-        public Embed HelpEmbed { get; }
-        public async Task<string> Handle(SocketMessage message)
+        public DiscordEmbed HelpEmbed { get; }
+        public async Task<string> Handle(DiscordMessage message)
         {
-            var em = new EmbedBuilder();
+            var em = new DiscordEmbedBuilder();
             em.Color = Utilities.RandomColor();
-            em.Author = new EmbedAuthorBuilder()
+            em.Author = new DiscordEmbedBuilder.EmbedAuthor()
                         {
                             IconUrl = RexBotCore.Instance.KeenGuild.IconUrl,
                             Name = "Latest versions as reported by Keen news."
@@ -27,7 +22,7 @@ namespace RexBot.Commands
             em.AddInlineField("Space Engineers", RexBotCore.Instance.Jira.LastSpaceVersion);
             em.AddInlineField("Medieval Engineers", RexBotCore.Instance.Jira.LastMedievalVersion);
 
-            em.Footer = new EmbedFooterBuilder()
+            em.Footer = new DiscordEmbedBuilder.EmbedFooter()
                         {
                             Text = "Version numbers may not include hotfixes or minor releases."
                         };

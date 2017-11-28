@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
-using Discord;
-using Discord.WebSocket;
+using DSharpPlus.Entities;
 
 namespace RexBot.Commands
 {
@@ -12,9 +10,9 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Public;
         public string Command => "!help";
         public string HelpText => "Shows help. !help with no argument lists commands. !help (command) shows help for that command.";
-        public Embed HelpEmbed { get; }
+        public DiscordEmbed HelpEmbed { get; }
 
-        public async Task<string> Handle(SocketMessage message)
+        public async Task<string> Handle(DiscordMessage message)
         {
             bool isRexxar = message.Author.Id == RexBotCore.REXXAR_ID;
             if (message.Channel.Id != 345301157272354837)
@@ -22,26 +20,14 @@ namespace RexBot.Commands
 
             if (message.Content.Length == Command.Length)
             {
-                var em = new EmbedBuilder();
-                em.Fields.Add(new EmbedFieldBuilder()
-                              {
-                    IsInline = false,
-                                  Name = "Info commands",
-                                  Value = string.Join(", ", RexBotCore.Instance.InfoCommands.Where(i => i.Author == RexBotCore.REXXAR_ID && (i.IsPublic || isRexxar)).Select(j => j.Command))
-                              });
-                em.Fields.Add(new EmbedFieldBuilder()
-                              {
-                                  IsInline=false,
-                                  Name = "User commands",
-                    Value = string.Join(", ", RexBotCore.Instance.InfoCommands.Where(i => i.Author != RexBotCore.REXXAR_ID && (i.IsPublic || isRexxar)).Select(j => j.Command))
-                });
-                em.Fields.Add(new EmbedFieldBuilder()
-                              {
-                                  IsInline = false,
-                                  Name = "System commands",
-                                  Value = string.Join(", ", RexBotCore.Instance.ChatCommands.Where(c => c.HasAccess(message.Author)).Where(c => c.Access < CommandAccess.Rexxar || isRexxar).Select(c => c.Command))
-                              });
-                em.Color = new Color(102, 153, 255);
+                var em = new DiscordEmbedBuilder();
+                em.AddField("Info commands",
+                            string.Join(", ", RexBotCore.Instance.InfoCommands.Where(i => i.Author == RexBotCore.REXXAR_ID && (i.IsPublic || isRexxar)).Select(j => j.Command)));
+                em.AddField("User commands",
+                            string.Join(", ", RexBotCore.Instance.InfoCommands.Where(i => i.Author != RexBotCore.REXXAR_ID && (i.IsPublic || isRexxar)).Select(j => j.Command)));
+                em.AddField("System commands",
+                            string.Join(", ", RexBotCore.Instance.ChatCommands.Where(c => c.HasAccess(message.Author)).Where(c => c.Access < CommandAccess.Rexxar || isRexxar).Select(c => c.Command)));
+                em.Color = new DiscordColor(102, 153, 255);
                
                 await message.Channel.SendMessageAsync($"{message.Author.Mention} Use `!help [command]` for more info", embed: em.Build());
                 return null;
@@ -57,13 +43,9 @@ namespace RexBot.Commands
                     {
                         if (command.HelpEmbed == null)
                         {
-                            var em = new EmbedBuilder();
-                            em.Fields.Add(new EmbedFieldBuilder()
-                                          {
-                                              IsInline = false,
-                                              Name = command.Command,
-                                              Value = command.HelpText
-                                          });
+                            var em = new DiscordEmbedBuilder();
+                            em.AddField(command.Command,
+                                        command.HelpText);
                             await message.Channel.SendMessageAsync(message.Author.Mention, embed: em.Build());
                         }
                         else

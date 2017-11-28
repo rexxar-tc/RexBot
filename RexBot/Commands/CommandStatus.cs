@@ -1,6 +1,5 @@
 ﻿using System.Threading.Tasks;
-using Discord;
-using Discord.WebSocket;
+using DSharpPlus.Entities;
 
 namespace RexBot.Commands
 {
@@ -9,9 +8,9 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Developer;
         public string Command => "!status";
         public string HelpText => "Sets RexBot's current game";
-        public Embed HelpEmbed { get; }
+        public DiscordEmbed HelpEmbed { get; }
 
-        public async Task<string> Handle(SocketMessage message)
+        public async Task<string> Handle(DiscordMessage message)
         {
             if (message.Content.Length == Command.Length)
             {
@@ -21,7 +20,7 @@ namespace RexBot.Commands
 
             string arg = message.Content.Substring(Command.Length + 1);
 
-            await RexBotCore.Instance.RexbotClient.SetGameAsync(arg);
+            await RexBotCore.Instance.RexbotClient.UpdateStatusAsync(new DiscordGame(arg));
 
             return $"Set status to `{arg}`";
         }

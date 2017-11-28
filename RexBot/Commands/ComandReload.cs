@@ -1,6 +1,5 @@
 ﻿using System.Threading.Tasks;
-using Discord;
-using Discord.WebSocket;
+using DSharpPlus.Entities;
 
 namespace RexBot.Commands
 {
@@ -9,9 +8,9 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Rexxar;
         public string Command => "!reloadcommands";
         public string HelpText => "Reloads commands from disk";
-        public Embed HelpEmbed { get; }
+        public DiscordEmbed HelpEmbed { get; }
 
-        public async Task<string> Handle(SocketMessage message)
+        public async Task<string> Handle(DiscordMessage message)
         {
             RexBotCore.Instance.InfoCommands.Clear();
             RexBotCore.Instance.LoadCommands();

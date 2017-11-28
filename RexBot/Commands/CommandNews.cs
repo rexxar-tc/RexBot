@@ -1,10 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Discord;
-using Discord.WebSocket;
+﻿using System.Threading.Tasks;
+using DSharpPlus.Entities;
 
 namespace RexBot.Commands
 {
@@ -13,15 +8,15 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Public;
         public string Command => "!news";
         public string HelpText => "Gets news about Keen games.";
-        public Embed HelpEmbed { get; }
+        public DiscordEmbed HelpEmbed { get; }
 
-        public async Task<string> Handle(SocketMessage message)
+        public async Task<string> Handle(DiscordMessage message)
         {
             if(RexBotCore.Instance.Jira.LastSpaceVersion == null)
                 RexBotCore.Instance.Jira.GetNews();
             
-            var em = new EmbedBuilder();
-            em.Author = new EmbedAuthorBuilder()
+            var em = new DiscordEmbedBuilder();
+            em.Author = new DiscordEmbedBuilder.EmbedAuthor()
                         {
                             IconUrl = RexBotCore.Instance.KeenGuild.IconUrl,
                             Name = "Keen Software House News",

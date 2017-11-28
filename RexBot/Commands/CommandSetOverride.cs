@@ -1,10 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
-using Discord;
-using Discord.WebSocket;
+using DSharpPlus.Entities;
 
 namespace RexBot.Commands
 {
@@ -13,8 +10,8 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Rexxar;
         public string Command => "!setoverride";
         public string HelpText => "Sets command permission override. `!setoverride [!command] [true/false] @user";
-        public Embed HelpEmbed { get; }
-        public async Task<string> Handle(SocketMessage message)
+        public DiscordEmbed HelpEmbed { get; }
+        public async Task<string> Handle(DiscordMessage message)
         {
             var args = Utilities.ParseCommand(message.Content);
 

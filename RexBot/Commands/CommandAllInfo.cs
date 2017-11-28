@@ -1,8 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Threading.Tasks;
-using Discord;
-using Discord.WebSocket;
+using DSharpPlus.Entities;
 
 namespace RexBot.Commands
 {
@@ -11,11 +10,11 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Rexxar;
         public string Command => "!allinfo";
         public string HelpText => "Dumps all info commands";
-        public Embed HelpEmbed { get; }
+        public DiscordEmbed HelpEmbed { get; }
 
-        public async Task<string> Handle(SocketMessage message)
+        public async Task<string> Handle(DiscordMessage message)
         {
-            ISocketMessageChannel channel = message.Channel;
+            DiscordChannel channel = message.Channel;
             foreach (RexBotCore.InfoCommand command in RexBotCore.Instance.InfoCommands)
                 if (!command.ImageResponse)
                     await channel.SendMessageAsync($"{message.Author.Mention} {command.Response}");
@@ -25,7 +24,7 @@ namespace RexBot.Commands
                         await channel.SendFileAsync(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, command.Response), message.Author.Mention);
                     else
                     {
-                        EmbedBuilder em = new EmbedBuilder();
+                        var em = new DiscordEmbedBuilder();
                         em.ImageUrl = command.Response;
                         await channel.SendMessageAsync(message.Author.Mention, embed: em.Build());
                     }

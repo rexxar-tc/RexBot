@@ -1,23 +1,21 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Sockets;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
-using Discord.WebSocket;
+using DSharpPlus.Entities;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
-using RexBot.Commands;
 
 namespace RexBot
 {
     public class Globals
     {
-        public SocketMessage Message;
+        public DiscordMessage Message;
         public RexBotCore BotCore;
 
-        public Globals(SocketMessage message)
+        public Globals(DiscordMessage message)
         {
             Message = message;
             BotCore = RexBotCore.Instance;
@@ -26,7 +24,7 @@ namespace RexBot
 
     public static class ScriptManager
     {
-        public static async Task<object> ExecuteScript(string code, SocketMessage message = null)
+        public static async Task<object> ExecuteScript(string code, DiscordMessage message = null)
         {
             var op = ScriptOptions.Default
                                   .WithReferences("System.Runtime, Version = 4.0.0.0, Culture = neutral, PublicKeyToken = b03f5f7f11d50a3a")

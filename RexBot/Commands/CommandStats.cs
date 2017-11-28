@@ -3,9 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Discord;
-using Discord.Audio;
-using Discord.WebSocket;
+using DSharpPlus;
+using DSharpPlus.Entities;
 
 namespace RexBot.Commands
 {
@@ -14,11 +13,11 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Public;
         public string Command => "!stats";
         public string HelpText => "Gets post statistics for a channel or user. Usage: `!stats @rexxar` or `!stats #general`";
-        public Embed HelpEmbed { get; }
+        public DiscordEmbed HelpEmbed { get; }
 
-        public async Task<string> Handle(SocketMessage message)
+        public async Task<string> Handle(DiscordMessage message)
         {
-            var guild = (message.Channel as IGuildChannel)?.Guild;
+            var guild = message.Channel.Guild;
             if (!((guild?.Id == 125011928711036928) || (guild?.Id == 263612647579189248)))
                 return "This command is only available in the KSH discord.";
 
@@ -32,15 +31,15 @@ namespace RexBot.Commands
 
                 ulong[] topUserIds = messages.GroupBy(m => m.AuthorId).OrderByDescending(n => n.Count()).Select(o => o.Key).Distinct().Take(20).ToArray();
 
-                List<SocketUser> topUsers = new List<SocketUser>();
+                List<DiscordMember> topUsers = new List<DiscordMember>();
 
                 foreach (var id in topUserIds)
                 {
-                    var tUser = await guild.GetUserAsync(id);
+                    var tUser = await guild.GetMemberAsync(id);
                     if (tUser == null || tUser.IsBot || tUser.Username == "PhoBot")
                         continue;
 
-                    topUsers.Add((SocketUser)tUser);
+                    topUsers.Add(tUser);
                     if (topUsers.Count >= 5)
                         break;
                 }
@@ -57,7 +56,7 @@ namespace RexBot.Commands
                 Dictionary<ulong,int> messages = new Dictionary<ulong, int>();
                 foreach (var c in RexBotCore.Instance.KeenGuild.Channels)
                 {
-                    if (!(c is ISocketMessageChannel))
+                    if (c.Type != ChannelType.Text)
                         continue;
 
                     try
@@ -71,13 +70,13 @@ namespace RexBot.Commands
                 }
 
                 List<ulong> ids = messages.OrderByDescending(e => e.Value).Select(r => r.Key).ToList();
-                IGuildChannel activeChannel = null;
+                DiscordChannel activeChannel = null;
 
                 foreach (var id in ids)
                 {
-                    if (Utilities.CTGChannels.Contains(id) && !message.CTG())
+                    if (Utilities.CTGChannelIds.Contains(id) && !message.CTG())
                         continue;
-                    activeChannel = await guild.GetChannelAsync(id);
+                    activeChannel = guild.GetChannel(id);
                     Console.WriteLine(ids.IndexOf(id));
                     break;
                 }

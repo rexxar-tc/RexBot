@@ -1,8 +1,7 @@
 ﻿using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Discord;
-using Discord.WebSocket;
+using DSharpPlus.Entities;
 
 namespace RexBot.Commands
 {
@@ -11,9 +10,9 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Moderator;
         public string Command => "!ban";
         public string HelpText => "Bans users from all RexBot functions.";
-        public Embed HelpEmbed { get; }
+        public DiscordEmbed HelpEmbed { get; }
 
-        public async Task<string> Handle(SocketMessage message)
+        public async Task<string> Handle(DiscordMessage message)
         {
             if (!message.MentionedUsers.Any())
             {
@@ -24,13 +23,13 @@ namespace RexBot.Commands
                 sb.AppendLine("Banned users:");
                 foreach (var id in RexBotCore.Instance.BannedUsers)
                 {
-                    var user =RexBotCore.Instance.RexbotClient.GetUser(id);
+                    var user = await RexBotCore.Instance.RexbotClient.GetUserAsync(id);
                     sb.AppendLine(user.NickOrUserName());
                 }
                 return sb.ToString();
             }
 
-            foreach (SocketUser user in message.MentionedUsers)
+            foreach (var user in message.MentionedUsers)
             {
                 ulong id = user.Id;
                 if ((id == RexBotCore.REXXAR_ID) || (id == RexBotCore.REXBOT_ID))

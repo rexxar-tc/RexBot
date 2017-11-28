@@ -1,13 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.Data.SQLite;
 using System.IO;
-using System.Runtime.CompilerServices;
-using Discord;
-using Discord.WebSocket;
+using System.Linq;
+using DSharpPlus;
+using DSharpPlus.Entities;
 
 namespace RexBot
 {
@@ -15,15 +13,15 @@ namespace RexBot
     {
         private SQLiteConnection _dbConnection;
 
-        public DBManager(string filename)
+        public DBManager(string FileName)
         {
-            var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, filename);
+            var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, FileName);
             if (File.Exists(path))
             {
                 _dbConnection = new SQLiteConnection($"Data Source={path};Version=3;");
                 _dbConnection.Open();
                 RexBotCore.Instance.RexbotClient.MessageDeleted += RexbotClient_MessageDeleted;
-                RexBotCore.Instance.RexbotClient.MessageReceived += RexbotClient_MessageReceived;
+                RexBotCore.Instance.RexbotClient.MessageCreated += RexbotClient_MessageReceived;
                 RexBotCore.Instance.RexbotClient.MessageUpdated += RexbotClient_MessageUpdated;
                 return;
             }
@@ -37,7 +35,7 @@ namespace RexBot
 
             foreach (var channel in keenGuild.Channels)
             {
-                if (!(channel is SocketTextChannel))
+                if (channel.Type != ChannelType.Text)
                     continue;
 
                 Console.WriteLine($"Creating table for {channel.Name}: {channel.Id}");
@@ -47,22 +45,21 @@ namespace RexBot
             Console.WriteLine("DB init finished.");
 
             RexBotCore.Instance.RexbotClient.MessageDeleted += RexbotClient_MessageDeleted;
-            RexBotCore.Instance.RexbotClient.MessageReceived += RexbotClient_MessageReceived;
+            RexBotCore.Instance.RexbotClient.MessageCreated += RexbotClient_MessageReceived;
             RexBotCore.Instance.RexbotClient.MessageUpdated += RexbotClient_MessageUpdated;
         }
 
-        private async Task RexbotClient_MessageUpdated(Cacheable<IMessage, ulong> arg1, SocketMessage msg, ISocketMessageChannel arg3)
+        private async Task RexbotClient_MessageUpdated(DSharpPlus.EventArgs.MessageUpdateEventArgs e)
         {
             try
             {
-                var c = msg?.Channel as SocketGuildChannel;
-                if (c?.Guild.Id != 125011928711036928)
+                if (e.Guild.Id != 125011928711036928)
                 {
                     //Console.WriteLine("bad guild edit");
                     return;
                 }
 
-                int num = ExecuteNonQuery($"UPDATE K{msg.Channel.Id} SET edit = edit || '\r\n' || '{msg.Content.Replace("'", "''")}' WHERE messageId = {msg.Id}");
+                int num = ExecuteNonQuery($"UPDATE K{e.Channel.Id} SET edit = edit || '\r\n' || '{e.Message.Content.Replace("'", "''")}' WHERE messageId = {e.Message.Id}");
                 // Console.WriteLine($"Recorded edit for {num} message");
             }
             catch (Exception ex)
@@ -72,13 +69,12 @@ namespace RexBot
             }
         }
 
-        private async Task RexbotClient_MessageDeleted(Cacheable<IMessage, ulong> cacheable, ISocketMessageChannel socketMessageChannel)
+        private async Task RexbotClient_MessageDeleted(DSharpPlus.EventArgs.MessageDeleteEventArgs e)
         {
-
-            if ((socketMessageChannel as SocketGuildChannel)?.Guild.Id != 125011928711036928)
+            if (e.Guild.Id != 125011928711036928)
                 return;
 
-            int num = ExecuteNonQuery($"UPDATE K{socketMessageChannel.Id} SET deleted = 1 WHERE messageId = {cacheable.Id}");
+            int num = ExecuteNonQuery($"UPDATE K{e.Channel.Id} SET deleted = 1 WHERE messageId = {e.Message.Id}");
             //Console.WriteLine($"Set {num} message deleted");
         }
 
@@ -86,15 +82,15 @@ namespace RexBot
         {
             _dbConnection.Close();
         }
-        
-        private async Task RexbotClient_MessageReceived(SocketMessage msg)
+
+        private async Task RexbotClient_MessageReceived(DSharpPlus.EventArgs.MessageCreateEventArgs e)
         {
-            AddMessage(msg);
+            AddMessage(e.Message);
         }
         
-        public void AddMessage(SocketMessage msg)
+        public void AddMessage(DiscordMessage msg)
         {
-            if ((msg.Channel as SocketGuildChannel)?.Guild.Id != 125011928711036928)
+            if (msg.Channel.Guild.Id != 125011928711036928)
                 return;
 
             var result = ExecuteQuery($"SELECT count(*) FROM sqlite_master WHERE type='table' AND name ='K{msg.Channel.Id}'");
@@ -116,22 +112,22 @@ namespace RexBot
                 ExecuteNonQuery($"insert into K{msg.Channel.Id} (authorId, messageId, timestamp, message, deleted, edit) values ({msg.Author.Id}, {msg.Id}, {msg.Timestamp.UtcTicks}, @messagetext, 0, ' ')", parameters);
         }
 
-        public void AddMessage(IMessage msg)
-        {
-            if ((msg.Channel as SocketGuildChannel)?.Guild.Id != 125011928711036928)
-                return;
+        //public void AddMessage(DiscordMessage msg)
+        //{
+        //    if ((msg.Channel as SocketGuildChannel)?.Guild.Id != 125011928711036928)
+        //        return;
 
-            SQLiteParameter[] parameters =
-            {
-                new SQLiteParameter("@messagetext", msg.Content)
-            };
-            if (msg.Attachments.Any())
-                ExecuteNonQuery($"insert or ignore into K{msg.Channel.Id} (authorId, messageId, timestamp, message, deleted, edit, attachment) values ({msg.Author.Id}, {msg.Id}, {msg.Timestamp.UtcTicks}, @messagetext, 0, ' ', '{string.Join(", ", msg.Attachments.Select(a => a.Url))}')", parameters);
-            else
-                ExecuteNonQuery($"insert or ignore into K{msg.Channel.Id} (authorId, messageId, timestamp, message, deleted, edit) values ({msg.Author.Id}, {msg.Id}, {msg.Timestamp.UtcTicks}, @messagetext, 0, ' ')", parameters);
-        }
+        //    SQLiteParameter[] parameters =
+        //    {
+        //        new SQLiteParameter("@messagetext", msg.Content)
+        //    };
+        //    if (msg.Attachments.Any())
+        //        ExecuteNonQuery($"insert or ignore into K{msg.Channel.Id} (authorId, messageId, timestamp, message, deleted, edit, attachment) values ({msg.Author.Id}, {msg.Id}, {msg.Timestamp.UtcTicks}, @messagetext, 0, ' ', '{string.Join(", ", msg.Attachments.Select(a => a.Url))}')", parameters);
+        //    else
+        //        ExecuteNonQuery($"insert or ignore into K{msg.Channel.Id} (authorId, messageId, timestamp, message, deleted, edit) values ({msg.Author.Id}, {msg.Id}, {msg.Timestamp.UtcTicks}, @messagetext, 0, ' ')", parameters);
+        //}
 
-        public void AddMessages(IEnumerable<IMessage> messages)
+        public void AddMessages(IEnumerable<DiscordMessage> messages)
         {
             using (var transaction = _dbConnection.BeginTransaction())
             {

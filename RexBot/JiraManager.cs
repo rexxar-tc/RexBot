@@ -4,18 +4,14 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Net.Http.Headers;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using System.Xml.XPath;
 using Atlassian.Jira;
-using Discord;
-using Discord.WebSocket;
+using DSharpPlus.Entities;
 using ProtoBuf;
 using RexBot.Commands;
-using Attachment = Discord.Attachment;
 using Timer = System.Timers.Timer;
 
 namespace RexBot
@@ -23,7 +19,7 @@ namespace RexBot
     [ProtoContract]
     public class IssueMetadata
     {
-        public IssueMetadata(SocketMessage msg)
+        public IssueMetadata(DiscordMessage msg)
         {
             ReporterId = msg.Author.Id;
             ReporterChannel = msg.Channel.Id;
@@ -125,6 +121,8 @@ namespace RexBot
         public JiraManager(string URL, string username, string password)
         {
             Console.WriteLine("Initializing Jira...");
+            ServicePointManager.Expect100Continue = true;
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             jira = Jira.CreateRestClient(URL, username, password/*, new JiraRestClientSettings() {EnableRequestTrace = true}*/);
             CachedIssues = new List<CachedIssue>();
             Task.Run(() =>
@@ -141,6 +139,7 @@ namespace RexBot
                              Console.WriteLine($"Got {CachedVersions.Count} Versions");
                              //Console.WriteLine(string.Join(", ", CachedVersions.Select(v => v.Name)));
                              GetIssues(CachedIssues);
+                             RexBotCore.Instance.Trello.UpdateOrAddMany(CachedIssues);
                          }
                          catch (Exception ex)
                          {
@@ -175,9 +174,7 @@ namespace RexBot
                 for (int i = 0; i < data.Length; i++)
                     data[i] = new List<IList<object>>();
 
-                Console.WriteLine($"[{DateTime.Now}]: Updating Trello...");
                 RexBotCore.Instance.Trello.UpdateOrAddMany(CachedIssues);
-                Console.WriteLine($"[{DateTime.Now}]: Update done.");
 
                 foreach (var newIssue in CachedIssues)
                 {
@@ -211,7 +208,7 @@ namespace RexBot
                                       sb.ToString()
                                   };
 
-                        if (oldIssue.Metadata.IsCTG || Utilities.CTGChannels.Contains(oldIssue.Metadata.ReporterChannel))
+                        if (oldIssue.Metadata.IsCTG || Utilities.CTGChannelIds.Contains(oldIssue.Metadata.ReporterChannel))
                         {
                             if (oldIssue.Issue.Status.Name == "Resolved" || oldIssue.Issue.Status.Name == "Cancel" || oldIssue.Issue.Status.Name == "Implemented")
                                 //await RexBotCore.Instance.CTGSheet.AppendRow("Old Reports", row);
@@ -243,7 +240,7 @@ namespace RexBot
                                     throw new ArgumentOutOfRangeException();
                             }
                         }
-                        if (!oldIssue.Metadata.IsCTG && Utilities.CTGChannels.Contains(oldIssue.Metadata.ReporterChannel))
+                        if (!oldIssue.Metadata.IsCTG && Utilities.CTGChannelIds.Contains(oldIssue.Metadata.ReporterChannel))
                         {
                             oldIssue.Metadata.IsCTG = true;
                             RexBotCore.Instance.Jira.UpdateMetadata(oldIssue.Issue, oldIssue.Metadata);
@@ -332,15 +329,15 @@ namespace RexBot
             //else
             //    sheetIndex = await RexBotCore.Instance.PublicSheet.FindRow("Public List", newIssue.Key);
 
-            ISocketMessageChannel channel;
+            DiscordChannel channel;
             if (!newIssue.Metadata.IsCTG)
-                channel = (ISocketMessageChannel)RexBotCore.Instance.RexbotClient.GetChannel(136097351134740480);
+                channel = await RexBotCore.Instance.RexbotClient.GetChannelAsync(136097351134740480);
             else
             {
                 if (newIssue.Issue.Project == "SE")
-                    channel = (ISocketMessageChannel)RexBotCore.Instance.RexbotClient.GetChannel(166886199200448512);
+                    channel = await RexBotCore.Instance.RexbotClient.GetChannelAsync(166886199200448512);
                 else
-                    channel = (ISocketMessageChannel)RexBotCore.Instance.RexbotClient.GetChannel(222685377201307648);
+                    channel = await RexBotCore.Instance.RexbotClient.GetChannelAsync(222685377201307648);
             }
 
             if (newComments.Count() > oldComments.Count())
@@ -383,7 +380,7 @@ namespace RexBot
             }
         }
 
-        public async Task<CachedIssue> AddIssue(ProjectKey project, string description, string version, IssueMetadata meta, Dictionary<Attachment, string> attachments = null)
+        public async Task<CachedIssue> AddIssue(ProjectKey project, string description, string version, IssueMetadata meta, Dictionary<DiscordAttachment, string> attachments = null)
         {
             string summary;
             if (description.Length > 50)
@@ -396,7 +393,7 @@ namespace RexBot
             return await AddIssue(project, summary, description, version, meta, attachments);
         }
 
-        public async Task<CachedIssue> AddIssue(ProjectKey project, string summary, string description, string version, IssueMetadata meta, Dictionary<Attachment, string> attachments = null)
+        public async Task<CachedIssue> AddIssue(ProjectKey project, string summary, string description, string version, IssueMetadata meta, Dictionary<DiscordAttachment, string> attachments = null)
         {
             try
             {
@@ -435,29 +432,30 @@ namespace RexBot
                     //                              {
                     //                                  using (var client = new WebClient())
                     //                                  {
-                    //                                      client.DownloadFile(a.Key.Url, a.Key.Filename);
+                    //                                      client.DownloadFile(a.Key.Url, a.Key.FileName);
                     //                                  }
                     //                              });
                     //issue.AddAttachment();
-                    //issue.AddAttachment(attachments.Select(a => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, a.Filename)).ToArray());
+                    //issue.AddAttachment(attachments.Select(a => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, a.FileName)).ToArray());
                     //foreach (Attachment attachment in attachments)
-                    //    File.Delete(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, attachment.Filename));
+                    //    File.Delete(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, attachment.FileName));
                     using (var client = new WebClient())
                     {
                         foreach (var e in attachments)
                         {
+                            
                             var b = client.DownloadData(e.Key.Url);
                             string name;
                             if (string.IsNullOrEmpty(e.Value))
-                                name = e.Key.Filename;
+                                name = e.Key.FileName;
                             else
                             {
                                 name = e.Value;
-                                int ind = e.Key.Filename.LastIndexOf('.');
+                                int ind = e.Key.FileName.LastIndexOf('.');
                                 if (ind == -1)
-                                    name = e.Key.Filename;
+                                    name = e.Key.FileName;
                                 else
-                                    name += e.Key.Filename.Substring(ind);
+                                    name += e.Key.FileName.Substring(ind);
                             }
                             issue.AddAttachment(name, b);
                         }
@@ -485,7 +483,7 @@ namespace RexBot
             NotAuthorized,
         }
 
-        public async Task<JiraActionResult> AddComment(string issueKey, string comment, SocketMessage message)
+        public async Task<JiraActionResult> AddComment(string issueKey, string comment, DiscordMessage message)
         {
             try
             {
@@ -516,12 +514,12 @@ namespace RexBot
                                                   {
                                                       using (var client = new WebClient())
                                                       {
-                                                          client.DownloadFile(a.Url, a.Filename);
+                                                          client.DownloadFile(a.Url, a.FileName);
                                                       }
                                                   });
-                    issue.AddAttachment(attachments.Select(a => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, a.Filename)).ToArray());
-                    foreach (Attachment attachment in attachments)
-                        File.Delete(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, attachment.Filename));
+                    issue.AddAttachment(attachments.Select(a => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, a.FileName)).ToArray());
+                    foreach (DiscordAttachment attachment in attachments)
+                        File.Delete(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, attachment.FileName));
                 }
 
                 return JiraActionResult.Ok;
@@ -533,7 +531,7 @@ namespace RexBot
             }
         }
 
-        public async Task<JiraActionResult> CancelTicket(string issueKey, SocketMessage message)
+        public async Task<JiraActionResult> CancelTicket(string issueKey, DiscordMessage message)
         {
             try
             {
@@ -619,15 +617,17 @@ namespace RexBot
         {
             IQueryable<Issue> issues = from i in jira.Issues.Queryable
                                        where i.Reporter == new LiteralMatch("Rex bot")
-                                       orderby i.Created
+                                       where i.Project == "SE"
+                                       orderby i.Key descending
                                        select i;
             var cache = new List<Issue>(issues);
             while (true)
             {
-                var date = cache.Max(i => i.Created);
+                var date = cache.Min(i => i.Key.Value);
                 var nex = from j in jira.Issues.Queryable
-                          where j.Reporter == new LiteralMatch("Rex bot") && j.Created > date
-                          orderby j.Created
+                          where j.Reporter == new LiteralMatch("Rex bot") && j.Key < date
+                          where j.Project == "SE"
+                          orderby j.Key descending
                           select j;
                 if (!nex.Any())
                     break;
@@ -645,6 +645,37 @@ namespace RexBot
                     break;
             }
 
+            issues = from i in jira.Issues.Queryable
+                     where i.Reporter == new LiteralMatch("Rex bot")
+                     where i.Project == "ME"
+                     orderby i.Key descending
+                     select i;
+            var mcache = new List<Issue>(issues);
+            while (true)
+            {
+                var date = mcache.Min(i => i.Key.Value);
+                var nex = from j in jira.Issues.Queryable
+                          where j.Reporter == new LiteralMatch("Rex bot") && j.Key < date
+                          where j.Project == "ME"
+                          orderby j.Key descending
+                          select j;
+                if (!nex.Any())
+                    break;
+
+                bool unique = false;
+                foreach (var k in nex)
+                {
+                    if (!mcache.Exists(l => l.Key.Equals(k.Key)))
+                    {
+                        unique = true;
+                        mcache.Add(k);
+                    }
+                }
+                if (!unique)
+                    break;
+            }
+
+            cache.AddRange(mcache);
             list.Clear();
             foreach (Issue issue in cache)
             {

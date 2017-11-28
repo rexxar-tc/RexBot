@@ -2,11 +2,10 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Discord;
-using Discord.WebSocket;
+using DSharpPlus;
+using DSharpPlus.Entities;
 
 namespace RexBot.Commands
 {
@@ -15,23 +14,24 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Public;
         public string Command => "!leaderboard";
         public string HelpText => "";
-        public Embed HelpEmbed { get; }
+        public DiscordEmbed HelpEmbed { get; }
 
-        public async Task<string> Handle(SocketMessage message)
+        public async Task<string> Handle(DiscordMessage message)
         {
             try
             {
-                SocketGuild server = RexBotCore.Instance.KeenGuild;
+                var server = RexBotCore.Instance.KeenGuild;
                 var start = DateTime.Now;
                 var messageCounts = new ConcurrentDictionary<ulong, int>();
                 
-                var em = new EmbedBuilder(); long count = 0;
+                var em = new DiscordEmbedBuilder();
+                long count = 0;
 
-                var channels = new List<ISocketMessageChannel>();
+                var channels = new List<DiscordChannel>();
 
                 if (message.MentionedChannels != null && message.MentionedChannels.Count > 0)
                 {
-                    var c = message.MentionedChannels.First() as ISocketMessageChannel;
+                    var c = message.MentionedChannels.First();
                     if (c == null)
                     {
                         return "Error";
@@ -40,7 +40,7 @@ namespace RexBot.Commands
                     em.Title = $"#{c.Name}";
                 }
                 else
-                    channels.AddRange(server.TextChannels);
+                    channels.AddRange(server.Channels.Where(ch => ch.Type == ChannelType.Text));
                 
                 Parallel.ForEach(channels, channel =>
                                            {
@@ -74,11 +74,11 @@ namespace RexBot.Commands
 
                 sort.Sort((b,a)=>a.count.CompareTo(b.count));
                 
-                List<SocketUser> users = new List<SocketUser>(25);
+                List<DiscordMember> users = new List<DiscordMember>(25);
 
                 foreach (var c in sort)
                 {
-                    var user = RexBotCore.Instance.RexbotClient.GetUser(c.user);
+                    var user = await RexBotCore.Instance.KeenGuild.GetMemberAsync(c.user);
                     if (user == null || user.IsBot)
                         continue;
 
@@ -88,7 +88,7 @@ namespace RexBot.Commands
                         break;
                 }
 
-                em.Author = new EmbedAuthorBuilder()
+                em.Author = new DiscordEmbedBuilder.EmbedAuthor()
                             {
                                 IconUrl = RexBotCore.Instance.KeenGuild.IconUrl,
                                 Name = "Leaderboard for Keen Software House"
@@ -98,16 +98,13 @@ namespace RexBot.Commands
                 {
                     var user = users[index];
                     var c = sort.Find(mc => mc.user == user.Id);
-                    
-                    em.Fields.Add(new EmbedFieldBuilder()
-                                  {
-                                      IsInline=true,
-                                      Name = $"#{index+1}: {user.NickOrUserName()}",
-                                      Value = $"{c.count:n0} Messages"
-                                  });
+
+                    em.AddField($"#{index + 1}: {user.NickOrUserName()}",
+                                $"{c.count:n0} Messages",
+                                true);
                 }
                 
-                em.Footer = new EmbedFooterBuilder()
+                em.Footer = new DiscordEmbedBuilder.EmbedFooter()
                             {
                                 Text = $"Processed {count:n0} messages in {(DateTime.Now - start).TotalMilliseconds:n0}ms."
                             };

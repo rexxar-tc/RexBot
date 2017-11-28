@@ -1,10 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
-using Discord;
-using Discord.WebSocket;
+using DSharpPlus.Entities;
 
 namespace RexBot.Commands
 {
@@ -13,9 +9,9 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Modder;
         public string Command => "!owner";
         public string HelpText => "Finds the owner of a given chat command.";
-        public Embed HelpEmbed { get; }
+        public DiscordEmbed HelpEmbed { get; }
 
-        public async Task<string> Handle(SocketMessage message)
+        public async Task<string> Handle(DiscordMessage message)
         {
             var arg = Utilities.StripCommand(this, message.Content);
             if (string.IsNullOrEmpty(arg))

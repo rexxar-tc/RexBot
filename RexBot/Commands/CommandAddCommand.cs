@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Linq;
-using System.Net;
 using System.Threading.Tasks;
-using Discord;
-using Discord.WebSocket;
+using DSharpPlus.Entities;
 
 namespace RexBot.Commands
 {
@@ -14,9 +12,9 @@ namespace RexBot.Commands
         public string HelpText => "Adds info command. `!addcommand [!commandKey] \"[response]\" (imageResponse)`\r\n" +
                                   "ImageResponse embeds the given link as an image. This is optional and defaults to false.";
 
-        public Embed HelpEmbed { get; }
+        public DiscordEmbed HelpEmbed { get; }
 
-        public async Task<string> Handle(SocketMessage message)
+        public async Task<string> Handle(DiscordMessage message)
         {
             string[] splits = Utilities.ParseCommand(message.Content);
             if ((splits.Length > 4) || (splits.Length < 2))

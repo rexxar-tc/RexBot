@@ -2,7 +2,8 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
+using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using Manatee.Trello;
 using Manatee.Trello.ManateeJson;
@@ -14,6 +15,10 @@ namespace RexBot
     {
         public readonly TrelloBoard PublicBoard;
         public readonly TrelloBoard CTGBoard;
+        private readonly Thread _updateThread;
+        private bool _dispose;
+        private readonly List<CachedIssue> _cache;
+        private readonly HashSet<CachedIssue> _addCache;
         
         public TrelloManager(string key, string token, string publicBoard, string ctgBoard)
         {
@@ -29,6 +34,61 @@ namespace RexBot
 
             PublicBoard = new TrelloBoard(publicBoard);
             CTGBoard = new TrelloBoard(ctgBoard);
+
+            _cache = new List<CachedIssue>();
+            _addCache = new HashSet<CachedIssue>();
+            _updateThread = new Thread(ProcessUpdate);
+            _updateThread.Start();
+        }
+
+        public void Dispose()
+        {
+            _dispose = true;
+            _updateThread.Join();
+        }
+
+        public void ProcessUpdate()
+        {
+            while (true)
+            {
+                //Console.WriteLine($"[{DateTime.Now}] Updating");
+                for (int i = 0; i < _cache.Count; i++)
+                {
+                    try
+                    {
+                        //Console.WriteLine($"[{DateTime.Now}] {_cache[i].Key}");
+                        UpdateOrAdd(_cache[i]);
+                        Thread.Sleep(100);
+                    }
+                    catch (HttpRequestException rex)
+                    {
+                        if (rex.ToString().Contains("rate limit"))
+                        {
+                            Utilities.Log("Rate limit");
+                            Thread.Sleep(5000);
+                            i--;
+                        }
+                        //else
+                         //   Utilities.Log(rex);
+                    }
+                    catch (Exception ex)
+                    {
+                       // Utilities.Log(ex);
+                    }
+                }
+
+                _cache.Clear();
+                lock (_addCache)
+                {
+                    if (_addCache.Any())
+                    {
+                        _cache.AddRange(_addCache);
+                        _addCache.Clear();
+                        continue;
+                    }
+                }
+                Thread.Sleep(30000);
+            }
         }
 
         public string AddIssue(CachedIssue issue)
@@ -73,8 +133,10 @@ namespace RexBot
 
                                                       card.Attachments.Add(b, a.FileName);
                                                   }
-                                                  catch(Exception ex)
-                                                  { Console.WriteLine(ex);}
+                                                  catch (Exception ex)
+                                                  {
+                                                      Utilities.Log(ex);
+                                                  }
                                               });
             }
 
@@ -92,6 +154,7 @@ namespace RexBot
 
         public static void Clean(Board board)
         {
+            return;
             var cds = board.Cards.Where(c => c.IsArchived == true);
             foreach(var c in cds)
                 c.Delete();
@@ -129,10 +192,63 @@ namespace RexBot
             }
         }
 
-        public void UpdateOrAddMany(IEnumerable<CachedIssue> issues)
+        public void UpdateOrAddMany(IList<CachedIssue> issues)
         {
-            foreach(var i in issues)
-                UpdateOrAdd(i);
+            lock(_addCache)
+                _addCache.UnionWith(issues);
+            //return;
+            //var l = issues.ToList();
+            //Task.Run(() =>
+            //         {
+            //             for (int i = 0; i < l.Count; i++)
+            //             {
+            //                 try
+            //                 {
+            //                     Console.WriteLine($"[{DateTime.Now}] {l[i].Key}");
+            //                     UpdateOrAdd(l[i]);
+            //                     Thread.Sleep(100);
+            //                 }
+            //                 catch (HttpRequestException rex)
+            //                 {
+            //                     if (rex.ToString().Contains("rate limit"))
+            //                     {
+            //                         Utilities.Log("Rate limit");
+            //                         Thread.Sleep(5000);
+            //                         i--;
+            //                     }
+            //                     else
+            //                         throw;
+            //                 }
+            //                 catch (Exception ex)
+            //                 {
+            //                     Utilities.Log(ex);
+            //                 }
+            //             }
+            //         });
+            //for (int i = 0; i < issues.Count; i++)
+            //{
+            //    try
+            //    {
+            //        UpdateOrAdd(issues[i]);
+            //        Thread.Sleep(1000);
+            //    }
+            //    catch (HttpRequestException rex)
+            //    {
+            //        Utilities.Log("Rate limit");
+            //        Thread.Sleep(10000);
+            //        //i--;
+            //    }
+            //    catch (Exception ex)
+            //    {
+            //        Utilities.Log(ex);
+            //    }
+            //}
+            //foreach (var i in issues)
+            //{
+            //    UpdateOrAdd(i);
+            //    Console.WriteLine($"Updating {i.Key}");
+            //    Thread.Sleep(100);
+            //}
         }
 
         public List GetList(CachedIssue issue)

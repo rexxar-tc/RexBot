@@ -1,16 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using System.Reflection.Metadata;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Xml;
-using Discord;
-using Discord.Rest;
-using Discord.WebSocket;
-using RexBot.Commands;
+using DSharpPlus.Entities;
 
 namespace RexBot
 {
@@ -62,8 +56,8 @@ namespace RexBot
         public bool BadVersion;
         public string Description;
         public bool CTG;
-        private IDMChannel DMChannel;
-        private Dictionary<Attachment, string> Attachments = new Dictionary<Attachment, string>();
+        private DiscordDmChannel DMChannel;
+        private Dictionary<DiscordAttachment, string> Attachments = new Dictionary<DiscordAttachment, string>();
         public StepEnum CurrentStep;
         public JiraManager.ProjectKey Game;
         private bool _upload = true;
@@ -83,7 +77,7 @@ namespace RexBot
             Finished,
         }
 
-        public BugreportBuilder(ulong userId, IDMChannel channel)
+        public BugreportBuilder(ulong userId, DiscordDmChannel channel)
         {
             DMChannel = channel;
             ChannelId = channel.Id;
@@ -92,7 +86,7 @@ namespace RexBot
             DMChannel.SendMessageAsync(STEP_GAME);
         }
 
-        public async Task Process(SocketMessage msg)
+        public async Task Process(DiscordMessage msg)
         {
             if (msg == null)
                 return;
@@ -404,7 +398,7 @@ namespace RexBot
             }
         }
 
-        private async Task ShowSummaryDebug(SocketMessage msg)
+        private async Task ShowSummaryDebug(DiscordMessage msg)
         {
             Game = JiraManager.ProjectKey.SE;
             Version = "1.180.401";
@@ -429,7 +423,7 @@ namespace RexBot
         //embed limits
         //field amount = 25, title/field name = 256, value = 1024, footer text/description = 2048
         //Note that the sum of all characters in the embed should be less than or equal to 6000.
-        private async Task ShowSummary(SocketMessage msg)
+        private async Task ShowSummary(DiscordMessage msg)
         {
             try
             {
@@ -439,21 +433,19 @@ namespace RexBot
                     return;
                 }
 
-                var em = new EmbedBuilder();
-                em.Author = new EmbedAuthorBuilder()
+                var em = new DiscordEmbedBuilder();
+                em.Author = new DiscordEmbedBuilder.EmbedAuthor()
                             {
-                                IconUrl = msg.Author.GetAvatarUrl(),
+                                IconUrl = msg.Author.AvatarUrl,
                                 Name = "BugBuilder Review"
                             };
 
                 em.Description = STEP_CONFIRM;
 
-                var cb = new byte[3];
-                _random.NextBytes(cb);
-                em.Color = new Color(cb[0], cb[1], cb[2]);
-                em.Footer = new EmbedFooterBuilder()
+                em.Color = Utilities.RandomColor();
+                em.Footer = new DiscordEmbedBuilder.EmbedFooter()
                 {
-                    IconUrl = RexBotCore.Instance.RexbotClient.CurrentUser.GetAvatarUrl(),
+                    IconUrl = RexBotCore.Instance.RexbotClient.CurrentUser.AvatarUrl,
                     Text = "Crafted with robotic love ♥"
                 };
                 em.Timestamp = DateTimeOffset.Now;
@@ -487,10 +479,13 @@ namespace RexBot
                     }
                 }
 
-                var at = Attachments.Keys.FirstOrDefault(a => a.Filename.EndsWith(".jpg") || a.Filename.EndsWith(".png"));
-                if (at != null)
+                if (Attachments?.Count > 0)
                 {
-                    em.ImageUrl = at.Url;
+                    var at = Attachments.Keys.FirstOrDefault(a => a.FileName.EndsWith(".jpg") || a.FileName.EndsWith(".png"));
+                    if (at != null)
+                    {
+                        em.ImageUrl = at.Url;
+                    }
                 }
 
                 await DMChannel.SendMessageAsync("If you can't see this embed, send `!text` to get the text version.", embed: em.Build());
@@ -505,7 +500,7 @@ namespace RexBot
             }
         }
         
-        private async Task ShowSummaryText(SocketMessage msg)
+        private async Task ShowSummaryText(DiscordMessage msg)
         {
             await DMChannel.SendMessageAsync(STEP_CONFIRM);
             var sb = new StringBuilder();
@@ -530,7 +525,7 @@ namespace RexBot
             }
         }
 
-        private void SendReport(SocketMessage msg)
+        private void SendReport(DiscordMessage msg)
         {
             var ind = Summary.IndexOf("game breaking", StringComparison.CurrentCultureIgnoreCase);
             if (ind >= 0)

@@ -1,6 +1,5 @@
 ﻿using System.Threading.Tasks;
-using Discord;
-using Discord.WebSocket;
+using DSharpPlus.Entities;
 
 namespace RexBot.Commands
 {
@@ -9,9 +8,9 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Rexxar;
         public string Command => "!msg";
         public string HelpText => "Sends a message to the given channel";
-        public Embed HelpEmbed { get; }
+        public DiscordEmbed HelpEmbed { get; }
 
-        public async Task<string> Handle(SocketMessage message)
+        public async Task<string> Handle(DiscordMessage message)
         {
             string[] args = Utilities.ParseCommand(message.Content);
 
@@ -19,13 +18,14 @@ namespace RexBot.Commands
             if (!ulong.TryParse(args[0], out id))
                 return "Can't parse channel ID!";
 
-            foreach (SocketGuild guild in RexBotCore.Instance.RexbotClient.Guilds)
+            foreach (var e in RexBotCore.Instance.RexbotClient.Guilds)
             {
-                SocketGuildChannel channel = guild.GetChannel(id);
+                var guild = e.Value;
+                var channel = guild.GetChannel(id);
                 if (channel == null)
                     continue;
 
-                await ((ISocketMessageChannel)channel).SendMessageAsync(string.Join(" ", args, 1, args.Length - 1));
+                await channel.SendMessageAsync(string.Join(" ", args, 1, args.Length - 1));
                 break;
             }
 

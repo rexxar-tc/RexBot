@@ -14,7 +14,7 @@
 //        public bool IsPublic => true;
 //        public string Command => "!fixit";
 //        public string HelpText => "Adds an item to the log for rexxar to fix. `!fixit list` lists current items.";
-//        public async Task<string> Handle(SocketMessage message)
+//        public async Task<string> Handle(DiscordMessage message)
 //        {
 //            return "Fixit has been superceeded. Use !bugreport instead!";
 //            var arg = Utilities.StripCommand(this, message.Content);

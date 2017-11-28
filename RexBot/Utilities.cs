@@ -4,8 +4,8 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text.RegularExpressions;
-using Discord;
-using Discord.WebSocket;
+using DSharpPlus;
+using DSharpPlus.Entities;
 using RexBot.Commands;
 
 namespace RexBot
@@ -80,9 +80,9 @@ namespace RexBot
             }
         }
 
-        private static ISocketMessageChannel _logChannel = null;
+        private static DiscordChannel _logChannel = null;
 
-        private static ISocketMessageChannel LogChannel => _logChannel ?? (_logChannel = (ISocketMessageChannel)RexBotCore.Instance.RexbotClient.GetChannel(345299089975672832));
+        private static DiscordChannel LogChannel => _logChannel ?? (_logChannel = RexBotCore.Instance.RexbotClient.GetChannelAsync(345299089975672832).Result);
 
         public static void Log(string message)
         {
@@ -98,9 +98,9 @@ namespace RexBot
             Log(obj.ToString());
         }
 
-        public static bool HasAccess(CommandAccess level, SocketUser user)
+        public static bool HasAccess(CommandAccess level, DiscordUser user)
         {
-            var guilduser = RexBotCore.Instance.KeenGuild.GetUser(user.Id);
+            var guilduser = RexBotCore.Instance.KeenGuild.GetMemberAsync(user.Id).Result;
             switch (level)
             {
                 case CommandAccess.None:
@@ -137,13 +137,15 @@ namespace RexBot
             }
         }
 
-        public static readonly HashSet<ulong> CTGChannels = new HashSet<ulong>() { 166886199200448512, 222685377201307648, 166899016045559808, 294875742704107520 };
+        public static readonly HashSet<ulong> CTGChannelIds = new HashSet<ulong>() { 166886199200448512, 222685377201307648, 166899016045559808, 294875742704107520, 380670501766561792 };
+        public static HashSet<DiscordChannel> CTGChannels;
 
-        public static Color RandomColor()
+
+        public static DiscordColor RandomColor()
         {
             var b = new byte[3];
             _random.NextBytes(b);
-            return new Color(b[0], b[1], b[2]);
+            return new DiscordColor(b[0], b[1], b[2]);
         }
 
         public static bool HasProfanity(string input)
@@ -156,15 +158,17 @@ namespace RexBot
     {
         private static readonly Random _random = new Random();
 
-        public static bool HasAccess(this IChatCommand command, SocketUser user)
+        public static bool HasAccess(this IChatCommand command, DiscordUser user)
         {
             return Utilities.HasAccess(command.Access, user);
         }
 
-        public static string ServerName(this ISocketMessageChannel channel)
+        public static string ServerName(this DiscordChannel channel)
         {
-            var guildChannel = channel as SocketGuildChannel;
-            return guildChannel?.Guild.Name ?? "Private";
+            if (channel is DiscordDmChannel)
+                return "Private";
+
+            return channel.Guild.Name ?? "NULL!";
         }
 
         public static List<T> Copy<T>(this List<T> input)
@@ -218,47 +222,46 @@ namespace RexBot
             //    dic[key] = value;
         }
 
-        public static bool CTG(this SocketMessage msg)
+        public static bool CTG(this DiscordMessage msg)
         {
-            return Utilities.CTGChannels.Contains(msg.Channel.Id);
+            return Utilities.CTGChannelIds.Contains(msg.Channel.Id);
         }
 
-        public static string NickOrUserName(this SocketUser user)
+        public static bool CTG(this DiscordMember user)
         {
-            SocketGuildUser gu = user as SocketGuildUser;
-           
-            if (!string.IsNullOrEmpty(gu?.Nickname))
-                return gu.Nickname;
-
-            return user.Username;
+            return Utilities.CTGChannels.Any(i => i.PermissionsFor(user) != Permissions.None);
         }
 
-        public static bool CTG(this SocketUser user)
+        public static bool CTG(this DiscordUser user)
         {
-            return Utilities.CTGChannels.Any(i =>
-                                            {
-                                                var c = RexBotCore.Instance.RexbotClient.GetChannel(i);
-                                                return c.GetUser(user.Id) != null;
-                                            });
-        
+            var member = RexBotCore.Instance.KeenGuild.GetMemberAsync(user.Id).Result;
+            return member.CTG();
         }
 
-        public static bool IsRexxar(this SocketUser user)
+        public static bool IsRexxar(this DiscordUser user)
         {
             return user.Id == RexBotCore.REXXAR_ID;
         }
 
-        public static string NickOrUserName(this SocketGuildUser user)
+        public static string NickOrUserName(this DiscordMember user)
         {
             if (!string.IsNullOrEmpty(user?.Nickname))
                 return user.Nickname;
 
             return user?.Username;
         }
-
-        public static void AddInlineField(this EmbedBuilder em, string name, object value)
+        public static string NickOrUserName(this DiscordUser user)
         {
-            em.AddField(name, value, true);
+            DiscordMember gu = user as DiscordMember;
+
+            if (!string.IsNullOrEmpty(gu?.Nickname))
+                return gu.Nickname;
+
+            return user.Username;
+        }
+        public static void AddInlineField(this DiscordEmbedBuilder em, string name, object value)
+        {
+            em.AddField(name, value.ToString(), true);
         }
     }
 }

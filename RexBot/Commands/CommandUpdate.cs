@@ -15,7 +15,7 @@
 //        public CommandAccess Access => CommandAccess.Rexxar;
 //        public string Command => "!update";
 //        public string HelpText => "Updates RexBot";
-//        public Embed HelpEmbed { get; }
+//        public DiscordEmbed HelpEmbed { get; }
 
 //        private const string BAT = @"@ECHO OFF
 //SLEEP 20
@@ -23,7 +23,7 @@
 //REN RexBot.new RexBot.exe
 //RexBot.exe";
 
-//        public async Task<string> Handle(SocketMessage message)
+//        public async Task<string> Handle(DiscordMessage message)
 //        {
 //            var file = new FileInfo(@"\\192.168.1.141\e\GitHub\RexBot\RexBot\bin\Debug\RexBot.exe");
 //                var newFile = new FileInfo(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"RexBot.new"));

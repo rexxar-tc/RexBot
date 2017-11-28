@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
-using Discord;
-using Discord.WebSocket;
+using DSharpPlus.Entities;
 
 namespace RexBot.Commands
 {
@@ -10,9 +9,9 @@ namespace RexBot.Commands
         public CommandAccess Access => CommandAccess.Modder;
         public string Command => "!removecommand";
         public string HelpText => "Removes info command. `!removecommand [!commandKey]";
-        public Embed HelpEmbed { get; }
+        public DiscordEmbed HelpEmbed { get; }
 
-        public async Task<string> Handle(SocketMessage message)
+        public async Task<string> Handle(DiscordMessage message)
         {
             string target = message.Content.Substring(Command.Length + 1);
             foreach (RexBotCore.InfoCommand info in RexBotCore.Instance.InfoCommands)
