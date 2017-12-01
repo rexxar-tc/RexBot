@@ -13,7 +13,7 @@ namespace RexBot.Commands
         public async Task<string> Handle(DiscordMessage message)
         {
             var arg = Utilities.StripCommand(this, message.Content);
-            await RexBotCore.Instance.RexxarClient.UpdateStatusAsync(new DiscordGame(arg));
+            await RexBotCore.Instance.RexxarClient.UpdateStatusAsync(new DiscordActivity(arg));
             return null;
         }
     }

@@ -20,7 +20,7 @@ namespace RexBot.Commands
 
             string arg = message.Content.Substring(Command.Length + 1);
 
-            await RexBotCore.Instance.RexbotClient.UpdateStatusAsync(new DiscordGame(arg));
+            await RexBotCore.Instance.RexbotClient.UpdateStatusAsync(new DiscordActivity(arg));
 
             return $"Set status to `{arg}`";
         }

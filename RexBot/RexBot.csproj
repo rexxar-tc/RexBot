@@ -62,8 +62,8 @@
       <HintPath>..\packages\Discord.Addons.EmojiTools.2.0.1\lib\netstandard1.1\Discord.Addons.EmojiTools.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="DSharpPlus, Version=3.2.3.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\DSharpPlus.3.2.3\lib\net46\DSharpPlus.dll</HintPath>
+    <Reference Include="DSharpPlus, Version=4.0.0.384, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\DSharpPlus.4.0.0-beta-00384\lib\net46\DSharpPlus.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="EntityFramework, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089, processorArchitecture=MSIL">
@@ -242,6 +242,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="BugreportBuilder.cs" />
+    <Compile Include="Commands\CommandActivity.cs" />
     <Compile Include="Commands\CommandDevCount.cs" />
     <Compile Include="Commands\CommandEval.cs" />
     <Compile Include="Commands\CommandFindUser.cs" />
@@ -253,6 +254,7 @@
     <Compile Include="Commands\CommandOpenBug.cs" />
     <Compile Include="Commands\CommandOwner.cs" />
     <Compile Include="Commands\CommandPlayers.cs" />
+    <Compile Include="Commands\CommandRActivity.cs" />
     <Compile Include="Commands\CommandRemoveOverride.cs" />
     <Compile Include="Commands\CommandRGame.cs" />
     <Compile Include="Commands\CommandSetOverride.cs" />

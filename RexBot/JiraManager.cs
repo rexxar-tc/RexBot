@@ -162,6 +162,9 @@ namespace RexBot
                 CachedVersions = (await p.GetVersionsAsync()).ToList();
                 p = jira.Projects.GetProjectAsync("ME").Result;
                 CachedVersions.AddRange(p.GetVersionsAsync().Result);
+#if DEBUG
+                return;
+#endif
                 var oldIssues = new List<CachedIssue>(CachedIssues);
                 CachedIssues.Clear();
                 GetIssues(CachedIssues);

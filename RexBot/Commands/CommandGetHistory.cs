@@ -51,7 +51,7 @@ namespace RexBot.Commands
             Timer timer = new Timer(60 * 1000);
         public async Task RunInternal(DiscordMessage message)
         {
-            var server = await RexBotCore.Instance.RexbotClient.GetGuildAsync(125011928711036928);
+            var server = await RexBotCore.Instance.RexbotClient.GetGuildAsync(RexBotCore.Instance.KeenGuild.Id);
 
             if (server == null)
                 throw new Exception("fuck you and your cow");
@@ -91,7 +91,7 @@ namespace RexBot.Commands
 
                     Console.WriteLine($"Switching to {channel.Name}");
 
-                    if(channel.PermissionsFor(member) == Permissions.None)
+                    if(!channel.PermissionsFor(member).HasFlag(Permissions.ReadMessageHistory))
                     {
                         Console.WriteLine("No permission here :(");
                         continue;

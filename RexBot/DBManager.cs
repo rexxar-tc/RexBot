@@ -53,13 +53,18 @@ namespace RexBot
         {
             try
             {
-                if (e.Guild.Id != 125011928711036928)
+                if (e.Guild?.Id != RexBotCore.Instance.KeenGuild.Id)
                 {
                     //Console.WriteLine("bad guild edit");
                     return;
                 }
-
-                int num = ExecuteNonQuery($"UPDATE K{e.Channel.Id} SET edit = edit || '\r\n' || '{e.Message.Content.Replace("'", "''")}' WHERE messageId = {e.Message.Id}");
+                DiscordMessage msg = e.Message;
+                //Console.WriteLine(msg.Id);
+                if(msg.Content == null)
+                    msg = await e.Channel.GetMessageAsync(e.Message.Id);
+                if(msg?.Content == null)
+                    return;
+                int num = ExecuteNonQuery($"UPDATE K{e.Channel.Id} SET edit = edit || '\r\n' || '{msg.Content.Replace("'", "''")}' WHERE messageId = {msg.Id}");
                 // Console.WriteLine($"Recorded edit for {num} message");
             }
             catch (Exception ex)
@@ -71,7 +76,7 @@ namespace RexBot
 
         private async Task RexbotClient_MessageDeleted(DSharpPlus.EventArgs.MessageDeleteEventArgs e)
         {
-            if (e.Guild.Id != 125011928711036928)
+            if (e.Guild.Id != RexBotCore.Instance.KeenGuild.Id)
                 return;
 
             int num = ExecuteNonQuery($"UPDATE K{e.Channel.Id} SET deleted = 1 WHERE messageId = {e.Message.Id}");
@@ -90,7 +95,7 @@ namespace RexBot
         
         public void AddMessage(DiscordMessage msg)
         {
-            if (msg.Channel.Guild.Id != 125011928711036928)
+            if (msg.Channel.Guild.Id != RexBotCore.Instance.KeenGuild.Id)
                 return;
 
             var result = ExecuteQuery($"SELECT count(*) FROM sqlite_master WHERE type='table' AND name ='K{msg.Channel.Id}'");
@@ -114,7 +119,7 @@ namespace RexBot
 
         //public void AddMessage(DiscordMessage msg)
         //{
-        //    if ((msg.Channel as SocketGuildChannel)?.Guild.Id != 125011928711036928)
+        //    if ((msg.Channel as SocketGuildChannel)?.Guild.Id != RexBotCore.Instance.KeenGuild.Id)
         //        return;
 
         //    SQLiteParameter[] parameters =

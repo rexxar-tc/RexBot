@@ -18,7 +18,7 @@ namespace RexBot.Commands
         public async Task<string> Handle(DiscordMessage message)
         {
             var guild = message.Channel.Guild;
-            if (!((guild?.Id == 125011928711036928) || (guild?.Id == 263612647579189248)))
+            if (!((guild?.Id == RexBotCore.Instance.KeenGuild.Id) || (guild?.Id == 263612647579189248)))
                 return "This command is only available in the KSH discord.";
 
             if (message.MentionedUsers.Any() && message.MentionedChannels.Any())

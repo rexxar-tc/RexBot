@@ -18,8 +18,8 @@ namespace RexBot.Commands
             if (!Enum.TryParse(message.Content.Substring(Command.Length + 1), out status))
                 return $"Correct values are {string.Join(", ", Enum.GetNames(typeof(UserStatus)))}";
 
-            await RexBotCore.Instance.RexxarClient.UpdateStatusAsync(null, status);
-            return $"Set rexxar to {status}";
+            await RexBotCore.Instance.RexbotClient.UpdateStatusAsync(null, status);
+            return $"Set RexBot to {status}";
         }
     }
 }

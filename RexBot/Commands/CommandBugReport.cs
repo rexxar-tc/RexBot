@@ -53,7 +53,7 @@ namespace RexBot.Commands
         public async Task<string> Handle(DiscordMessage message)
         {
             ulong channelid = message.Channel.GuildId;
-            if (!(channelid == 125011928711036928 || channelid == 263612647579189248))
+            if (!(channelid == RexBotCore.Instance.KeenGuild.Id || channelid == 263612647579189248 || message.Channel is DiscordDmChannel))
                 return "This command is only available in the KSH discord.";
             
             string arg = Utilities.StripCommand(this, message.Content);
@@ -95,7 +95,7 @@ namespace RexBot.Commands
 
             if (parts[0].Equals("list", StringComparison.CurrentCultureIgnoreCase))
             {
-                if (message.CTG() || (!(message.Channel is DiscordDmChannel) && message.Author.CTG()))
+                if (message.CTG() || ((message.Channel is DiscordDmChannel) && message.Author.CTG()))
                 {
                     var em = new DiscordEmbedBuilder();
                     em.AddField("Public List",

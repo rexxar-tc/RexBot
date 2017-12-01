@@ -229,7 +229,7 @@ namespace RexBot
 
         public static bool CTG(this DiscordMember user)
         {
-            return Utilities.CTGChannels.Any(i => i.PermissionsFor(user) != Permissions.None);
+            return Utilities.CTGChannels.Any(i => i.PermissionsFor(user).HasFlag(Permissions.AccessChannels));
         }
 
         public static bool CTG(this DiscordUser user)

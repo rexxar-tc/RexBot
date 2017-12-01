@@ -7,6 +7,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.Remoting.Messaging;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Serialization;
 using Discord.Addons.EmojiTools;
@@ -127,6 +128,8 @@ namespace RexBot
 #if !DEBUG
                 Console.WriteLine("Loading missed history");
                 await GetMissingHistory();
+#else
+                await RexbotClient.UpdateStatusAsync(null, UserStatus.Offline);
 #endif
                 Console.WriteLine("Ready");
                 await Task.Delay(-1);
@@ -170,29 +173,27 @@ namespace RexBot
                 //if (RexbotClient == null)
                     RexbotClient = new DiscordClient(new DiscordConfiguration()
                                                      {
-                                                         //MessageCacheSize = 1000,
+                                                         MessageCacheSize = 1000,
                                                          Token = tokens["rexbot"],
                                                          TokenType = TokenType.Bot
                                                      });
                 await RexbotClient.ConnectAsync();
 
-                //AutoResetEvent e = new AutoResetEvent(false);
-                //RexbotClient.Ready += delegate
-                //                      {
-                //                          e.Set();
-                //                          return Task.CompletedTask;
-                //                      };
+                AutoResetEvent e = new AutoResetEvent(false);
+                RexbotClient.Ready += delegate
+                                      {
+                                          e.Set();
+                                          return Task.CompletedTask;
+                                      };
 
-                //Console.WriteLine("Waiting for fucking Volt");
-                //e.WaitOne();
-                //Console.WriteLine("Waiting done.");
+                Console.WriteLine("Waiting for ready");
+                e.WaitOne();
+                Console.WriteLine("Waiting done.");
 
 #if !DEBUG
                 //await RexxarClient.SetStatusAsync(UserStatus.Invisible);
                 await SetRandomStatus();
                 //await RexbotClient.SetGame( "Try !bugreport" );
-#else
-                await RexbotClient.UpdateStatusAsync(null, UserStatus.Invisible);
 #endif
                 RexbotClient.MessageCreated += RexbotClient_MessageCreated;
                 RexbotClient.GuildCreated += RexbotClient_GuildCreated;
@@ -371,12 +372,13 @@ namespace RexBot
                 Console.WriteLine("Loading chat commands...");
                 var assembly = Assembly.GetEntryAssembly();
                 Console.WriteLine($"Loading {assembly.FullName}");
-                var types = GetTypesSafely(assembly);
-                foreach (TypeInfo type in types)
+                //var types = GetTypesSafely(assembly);
+                var types = assembly.GetTypes();
+                foreach (var type in types)
                 {
                     try
                     {
-                        if (type.ImplementedInterfaces.Contains(typeof(IChatCommand)))
+                        if (type.GetTypeInfo().ImplementedInterfaces.Contains(typeof(IChatCommand)))
                         {
                             Console.WriteLine("Found: " + type.FullName);
                             ChatCommands.Add((IChatCommand)Activator.CreateInstance(type));
@@ -418,7 +420,7 @@ namespace RexBot
             var channel = e.Channel;
 
 #if DEBUG
-            if (message.Author.Id != REXXAR_ID)
+            if (message.Author.Id != REXXAR_ID && message.Author.Id != 210339391644631040)
                 return;
 #endif
 
@@ -632,6 +634,9 @@ start RexBot.exe";
         Queue<string> Last5Status = new Queue<string>(5);
         public async Task<string> SetRandomStatus()
         {
+#if DEBUG
+            return null;
+#endif
             string status;
             while (true)
             {
@@ -649,7 +654,7 @@ start RexBot.exe";
             Last5Status.Enqueue(status);
 
             Console.WriteLine($"Setting status to random entry: {status}");
-            await RexbotClient.UpdateStatusAsync(new DiscordGame(status));
+            await RexbotClient.UpdateStatusAsync(new DiscordActivity(status));
             return status;
         }
 
@@ -681,7 +686,7 @@ start RexBot.exe";
 
                     Console.WriteLine($"Switching to {channel.Name}");
                     
-                    if(channel.PermissionsFor(member) == Permissions.None)
+                    if(!channel.PermissionsFor(member).HasFlag(Permissions.ReadMessageHistory))
                     {
                         Console.WriteLine("No permission here :(");
                         continue;
