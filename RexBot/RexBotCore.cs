@@ -78,6 +78,8 @@ namespace RexBot
 
         public DiscordClient RexxarClient;
 
+        public SteamWebApi.SteamWebApi SteamWebApi;
+
         public DiscordGuild KeenGuild;
 
         public Sheets CTGSheet;
@@ -125,6 +127,8 @@ namespace RexBot
                 }
                 LoadBanned();
                 LoadOverrides();
+
+                SteamWebApi = new SteamWebApi.SteamWebApi(tokens["steamwebapi"]);
 #if !DEBUG
                 Console.WriteLine("Loading missed history");
                 await GetMissingHistory();

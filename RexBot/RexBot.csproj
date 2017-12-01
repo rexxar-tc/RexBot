@@ -194,6 +194,7 @@
       <HintPath>..\packages\System.Reflection.Metadata.1.4.2\lib\portable-net45+win8\System.Reflection.Metadata.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="System.Runtime.Caching" />
     <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.Runtime.Serialization.Primitives, Version=4.1.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <HintPath>..\packages\System.Runtime.Serialization.Primitives.4.1.1\lib\net46\System.Runtime.Serialization.Primitives.dll</HintPath>
@@ -259,6 +260,8 @@
     <Compile Include="Commands\CommandRGame.cs" />
     <Compile Include="Commands\CommandSetOverride.cs" />
     <Compile Include="Commands\CommandStats.cs" />
+    <Compile Include="Commands\CommandSteamWsAutoEmbed.cs" />
+    <Compile Include="Commands\CommandSteamWsEmbed.cs" />
     <Compile Include="Commands\CommandUpdate.cs" />
     <Compile Include="Commands\CommandVersion.cs" />
     <Compile Include="Commands\Emoji.cs" />
@@ -283,6 +286,13 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ScriptManager.cs" />
     <Compile Include="Sheets.cs" />
+    <Compile Include="SteamWebApi\CollectionDetails.cs" />
+    <Compile Include="SteamWebApi\PlayerDetails.cs" />
+    <Compile Include="SteamWebApi\PublishedFileDetails.cs" />
+    <Compile Include="SteamWebApi\SteamGameSchema.cs" />
+    <Compile Include="SteamWebApi\SteamWebApi.cs" />
+    <Compile Include="SteamWebApi\SteamWebResult.cs" />
+    <Compile Include="SteamWebApi\WorkshopFileType.cs" />
     <Compile Include="TrelloManager.cs" />
     <Compile Include="Utilities.cs" />
   </ItemGroup>
