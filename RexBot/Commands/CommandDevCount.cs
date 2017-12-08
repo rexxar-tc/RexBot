@@ -11,18 +11,23 @@ namespace RexBot.Commands
         public string Command => "!devcount";
         public string HelpText => "Counts devs.";
         public DiscordEmbed HelpEmbed { get; }
+        private const ulong DEV_ROLE = 125014635383357440ul;
 
         public async Task<string> Handle(DiscordMessage message)
         {
             int meCount=0;
             int seCount=0;
             int misCount=0;
-            
-            var devs = RexBotCore.Instance.KeenGuild.Members.Where(u => u.Roles.Any(r => r.Id == 125014635383357440ul));
+            var users = await RexBotCore.Instance.KeenGuild.GetAllMembersAsync();
 
-            foreach (var u in devs)
+            foreach (var u in users)
             {
-                var dev = await RexBotCore.Instance.KeenGuild.GetMemberAsync(u.Id);
+                if (!u.Roles.Any(r => r.Id == DEV_ROLE))
+                    continue;
+                var dev = u;
+                //var dev = await RexBotCore.Instance.KeenGuild.GetMemberAsyncSafe(u.Id);
+                if (dev == null)
+                    continue;
                 if (dev.Presence.Status == UserStatus.Offline)
                     continue;
                 if (dev.NickOrUserName().StartsWith("[SE]"))

@@ -13,6 +13,7 @@ using System.Xml.Serialization;
 using Discord.Addons.EmojiTools;
 using DSharpPlus;
 using DSharpPlus.Entities;
+using RexBot.AutoCommands;
 using RexBot.Commands;
 using Timer = System.Timers.Timer;
 
@@ -86,8 +87,10 @@ namespace RexBot
         public static RexBotCore Instance => _instance ?? (_instance = new RexBotCore());
 
         public List<InfoCommand> InfoCommands { get; private set; } = new List<InfoCommand>();
+        public List<AutoCommand> AutoCommands { get; private set; } = new List<AutoCommand>();
         public List<IChatCommand> ChatCommands { get; } = new List<IChatCommand>();
-
+        public List<IAutoCommand> SystemAuto { get; } = new List<IAutoCommand>();
+    
         public HashSet<ulong> BannedUsers => _bannedUsers;
         public Dictionary<string, Dictionary<ulong, bool>> PermissionOverrides => _permissionOverrides;
 
@@ -241,6 +244,12 @@ namespace RexBot
                 x.Serialize(writer, InfoCommands);
                 writer.Close();
             }
+            using (var writer = new StreamWriter(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "AutoCommands.xml")))
+            {
+                var x = new XmlSerializer(typeof(List<AutoCommand>));
+                x.Serialize(writer, AutoCommands);
+                writer.Close();
+            }
         }
 
         public void LoadCommands()
@@ -261,6 +270,23 @@ namespace RexBot
             }
 
             Console.WriteLine($"Found: {InfoCommands.Count}.");
+
+            FileName = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "AutoCommands.xml");
+            if (!File.Exists(FileName))
+            {
+                Console.WriteLine("AutoCommands file not found!");
+                AutoCommands = new List<AutoCommand>();
+                return;
+            }
+            Console.WriteLine("Loading auto commands...");
+            using (var reader = new StreamReader(FileName))
+            {
+                var x = new XmlSerializer(typeof(List<AutoCommand>));
+                AutoCommands = (List<AutoCommand>)x.Deserialize(reader);
+                reader.Close();
+            }
+
+            Console.WriteLine($"Found: {AutoCommands.Count}.");
             Console.WriteLine("Ok.");
         }
 
@@ -386,6 +412,11 @@ namespace RexBot
                         {
                             Console.WriteLine("Found: " + type.FullName);
                             ChatCommands.Add((IChatCommand)Activator.CreateInstance(type));
+                        }
+                        if (type.GetTypeInfo().ImplementedInterfaces.Contains(typeof(IAutoCommand)))
+                        {
+                            Console.WriteLine("Found: " + type.FullName);
+                            SystemAuto.Add((IAutoCommand)Activator.CreateInstance(type));
                         }
                     }
                     catch (Exception ex)
@@ -573,22 +604,32 @@ start RexBot.exe";
                         await channel.SendMessageAsync($"{message.Author.Mention} {response}");
                 }
 
-            if (_bannedUsers.Contains(message.Author.Id))
+            foreach (var auto in SystemAuto)
             {
-                //Console.WriteLine($"Responding to banned user {message.Author.Username}");
-                //await channel.SendMessageAsync($"{message.Author.Mention} You've been banned from using RexBot.");
-                return;
+                string response;
+                if (auto.Pattern.IsMatch(message.Content))
+                {
+                    try
+                    {
+                        response = await auto.Handle(message);
+                    }
+                    catch(Exception ex)
+                    {
+                        Console.WriteLine(ex);
+                        await channel.SendMessageAsync($"Error processing message!```{ex}```");
+                        break;
+                    }
+                    Console.WriteLine("Responding: " + response);
+                    if (!string.IsNullOrEmpty(response))
+                        await channel.SendMessageAsync($"{message.Author.Mention} {response}");
+                }
             }
 
-            if (Regex.IsMatch(message.Content, @"water in SE|water in space engineers", RegexOptions.IgnoreCase))
+            foreach (var auto in AutoCommands)
             {
-                await channel.SendMessageAsync(message.Author.Mention + " There are no plans to implement (liquid) water of any kind in Space Engineers.");
+                if (Regex.IsMatch(message.Content, auto.Pattern, RegexOptions.IgnoreCase))
+                    await channel.SendMessageAsync($"{message.Author.Mention} {auto.Response}");
             }
-            if (Regex.IsMatch(message.Content, @"water in ME|water in medieval engineers", RegexOptions.IgnoreCase))
-            {
-                await channel.SendMessageAsync(message.Author.Mention + " There are no plans to implement water of any kind in Medieval Engineers.");
-            }
-
         }
 
         private async Task RexxarClient_MessageCreated(DSharpPlus.EventArgs.MessageCreateEventArgs e)
@@ -675,8 +716,8 @@ start RexBot.exe";
             
             var channels = server.Channels;
 
-            var compareTime = TimeSpan.FromHours(1);
-            var member = await server.GetMemberAsync(REXBOT_ID);
+            var compareTime = TimeSpan.FromDays(30);
+            var member = await server.GetMemberAsyncSafe(REXBOT_ID);
 
             foreach (var channel in channels)
             {
@@ -757,6 +798,21 @@ start RexBot.exe";
                 Author = author;
                 IsPublic = isPublic;
                 ImageResponse = imageResponse;
+            }
+        }
+
+        [Serializable]
+        public struct AutoCommand
+        {
+            public string Pattern;
+            public string Response;
+            public ulong Author;
+
+            public AutoCommand(string pattern, string response, ulong author)
+            {
+                Pattern = pattern;
+                Response = response;
+                Author = author;
             }
         }
 

@@ -112,9 +112,9 @@ namespace RexBot
                 new SQLiteParameter("@messagetext", msg.Content)
             };
             if (msg.Attachments.Any())
-                ExecuteNonQuery($"insert into K{msg.Channel.Id} (authorId, messageId, timestamp, message, deleted, edit, attachment) values ({msg.Author.Id}, {msg.Id}, {msg.Timestamp.UtcTicks}, @messagetext, 0, ' ', '{string.Join(", ", msg.Attachments.Select(a=>a.Url))}')", parameters);
+                ExecuteNonQuery($"insert or ignore into K{msg.Channel.Id} (authorId, messageId, timestamp, message, deleted, edit, attachment) values ({msg.Author.Id}, {msg.Id}, {msg.Timestamp.UtcTicks}, @messagetext, 0, ' ', '{string.Join(", ", msg.Attachments.Select(a=>a.Url))}')", parameters);
             else
-                ExecuteNonQuery($"insert into K{msg.Channel.Id} (authorId, messageId, timestamp, message, deleted, edit) values ({msg.Author.Id}, {msg.Id}, {msg.Timestamp.UtcTicks}, @messagetext, 0, ' ')", parameters);
+                ExecuteNonQuery($"insert or ignore into K{msg.Channel.Id} (authorId, messageId, timestamp, message, deleted, edit) values ({msg.Author.Id}, {msg.Id}, {msg.Timestamp.UtcTicks}, @messagetext, 0, ' ')", parameters);
         }
 
         //public void AddMessage(DiscordMessage msg)

@@ -4,8 +4,11 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
+using DSharpPlus.Exceptions;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using RexBot.Commands;
 
 namespace RexBot
@@ -100,7 +103,7 @@ namespace RexBot
 
         public static bool HasAccess(CommandAccess level, DiscordUser user)
         {
-            var guilduser = RexBotCore.Instance.KeenGuild.GetMemberAsync(user.Id).Result;
+            var guilduser = RexBotCore.Instance.KeenGuild.GetMemberAsyncSafe(user.Id).Result;
             switch (level)
             {
                 case CommandAccess.None:
@@ -234,8 +237,8 @@ namespace RexBot
 
         public static bool CTG(this DiscordUser user)
         {
-            var member = RexBotCore.Instance.KeenGuild.GetMemberAsync(user.Id).Result;
-            return member.CTG();
+            var member = RexBotCore.Instance.KeenGuild.GetMemberAsyncSafe(user.Id)?.Result;
+            return member?.CTG() ?? false;
         }
 
         public static bool IsRexxar(this DiscordUser user)
@@ -262,6 +265,18 @@ namespace RexBot
         public static void AddInlineField(this DiscordEmbedBuilder em, string name, object value)
         {
             em.AddField(name, value.ToString(), true);
+        }
+
+        public static async Task<DiscordMember> GetMemberAsyncSafe(this DiscordGuild guild, ulong id)
+        {
+            try
+            {
+                return await guild.GetMemberAsync(id);
+            }
+            catch (NotFoundException)
+            {
+                return null;
+            }
         }
     }
 }

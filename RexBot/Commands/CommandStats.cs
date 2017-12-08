@@ -35,7 +35,7 @@ namespace RexBot.Commands
 
                 foreach (var id in topUserIds)
                 {
-                    var tUser = await guild.GetMemberAsync(id);
+                    var tUser = await guild.GetMemberAsyncSafe(id);
                     if (tUser == null || tUser.IsBot || tUser.Username == "PhoBot")
                         continue;
 

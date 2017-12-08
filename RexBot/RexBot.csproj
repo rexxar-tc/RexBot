@@ -261,8 +261,10 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AutoCommands\AutoWSEmbed.cs" />
     <Compile Include="BugreportBuilder.cs" />
     <Compile Include="Commands\CommandActivity.cs" />
+    <Compile Include="Commands\CommandAddAuto.cs" />
     <Compile Include="Commands\CommandDevCount.cs" />
     <Compile Include="Commands\CommandEval.cs" />
     <Compile Include="Commands\CommandFindUser.cs" />
@@ -270,11 +272,13 @@
     <Compile Include="Commands\CommandGraph.cs" />
     <Compile Include="Commands\CommandLeaderboard.cs" />
     <Compile Include="Commands\CommandLeaveGuild.cs" />
+    <Compile Include="Commands\CommandListAutos.cs" />
     <Compile Include="Commands\CommandNews.cs" />
     <Compile Include="Commands\CommandOpenBug.cs" />
     <Compile Include="Commands\CommandOwner.cs" />
     <Compile Include="Commands\CommandPlayers.cs" />
     <Compile Include="Commands\CommandRActivity.cs" />
+    <Compile Include="Commands\CommandRemoveAuto.cs" />
     <Compile Include="Commands\CommandRemoveOverride.cs" />
     <Compile Include="Commands\CommandRGame.cs" />
     <Compile Include="Commands\CommandSetOverride.cs" />
@@ -285,6 +289,7 @@
     <Compile Include="Commands\CommandVersion.cs" />
     <Compile Include="Commands\Emoji.cs" />
     <Compile Include="DBManager.cs" />
+    <Compile Include="AutoCommands\IAutoCommand.cs" />
     <Compile Include="ItemClasses\JiraIssue.cs" />
     <Compile Include="JiraManager.cs" />
     <Compile Include="Commands\ComandReload.cs" />

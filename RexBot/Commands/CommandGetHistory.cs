@@ -78,7 +78,7 @@ namespace RexBot.Commands
             DBTimer.Start();
 
             var channels = server.Channels;
-            var member = await server.GetMemberAsync(RexBotCore.REXBOT_ID);
+            var member = await server.GetMemberAsyncSafe(RexBotCore.REXBOT_ID);
             foreach (var channel in channels)
             {
                 try

@@ -78,7 +78,7 @@ namespace RexBot.Commands
 
                 foreach (var c in sort)
                 {
-                    var user = await RexBotCore.Instance.KeenGuild.GetMemberAsync(c.user);
+                    var user = await RexBotCore.Instance.KeenGuild.GetMemberAsyncSafe(c.user);
                     if (user == null || user.IsBot)
                         continue;
 

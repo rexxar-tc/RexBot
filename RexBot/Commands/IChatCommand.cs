@@ -12,6 +12,7 @@ namespace RexBot.Commands
         Developer,
         Rexxar,
     }
+
     public interface IChatCommand
     {
         CommandAccess Access { get; }
